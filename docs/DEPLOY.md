@@ -33,17 +33,29 @@ design, and the app needs to read values.
 
 ## 1. Provision
 
+The whole project is declared in [`.railway/railway.ts`](../.railway/railway.ts)
+— services, regions, replicas, health checks, and every non-secret variable.
+There is no click-path to reproduce and no dashboard state that source does not
+describe.
+
 ```bash
 railway login                 # already done for eiaawsolutions@gmail.com
-railway init                  # creates the project
-railway link                  # link this working directory to it
-```
-
-Then add the one stateful dependency:
-
-```bash
+railway init --name eiaaw-finance-digital-worker
 railway add --database postgres
+railway config plan           # read this before applying
+railway config apply
 ```
+
+`railway config plan` prints exactly what will change. Read it. `apply` is the
+deploy.
+
+> **Windows note.** The `railway` npm SDK checks the CLI version by executing
+> `process.env._`, which POSIX shells set and PowerShell does not, so it reports
+> "CLI too old" regardless of the CLI version. Set it to the real binary first:
+>
+> ```powershell
+> $env:_ = "$env:APPDATA\npm\node_modules\@railway\cli\bin\railway.exe"
+> ```
 
 Railway injects `DATABASE_URL` into every service in the project. That variable
 is the single documented exception to the handle rule, because Railway owns the
@@ -65,20 +77,23 @@ worker always run the same `PLATFORM_VERSION`, which the decision record and the
 evidence bundle both reference — two processes on different versions would
 produce evidence that disagrees with itself.
 
-| Service   | Start command                        | Replicas    | Config                        |
-| --------- | ------------------------------------ | ----------- | ----------------------------- |
-| `migrate` | `pnpm db:migrate && pnpm db:seed`    | 1, run-once | `deploy/railway/migrate.json` |
-| `api`     | `node apps/api/dist/main.js`         | 2+          | `deploy/railway/api.json`     |
-| `worker`  | `node apps/worker/dist/main.js`      | 1           | `deploy/railway/worker.json`  |
-| `console` | `pnpm --filter @eiaaw/console start` | 1           | `deploy/railway/console.json` |
+| Service   | Start command                        | Replicas    | Restart    |
+| --------- | ------------------------------------ | ----------- | ---------- |
+| `migrate` | `pnpm db:migrate && pnpm db:seed`    | 1, run-once | NEVER      |
+| `api`     | `node apps/api/dist/main.js`         | 2           | ON_FAILURE |
+| `worker`  | `node apps/worker/dist/main.js`      | 1           | ON_FAILURE |
+| `console` | `pnpm --filter @eiaaw/console start` | 1           | ON_FAILURE |
 
-Create each in the dashboard from this repo, and point its **Config-as-code
-path** at the file above.
+All four are declared in `.railway/railway.ts` and created by
+`railway config apply`. Do not edit them in the dashboard — the next `apply`
+would revert the change, and the reason for it would be lost.
 
 The console is the reviewer's workspace and the operator's view. It calls the
-API server-side only, so set `PUBLIC_API_URL` on it to the API's private Railway
-address — the session credential then never reaches a browser, and the API does
-not need a public origin allowance for it.
+API server-side only, over `RAILWAY_PRIVATE_DOMAIN`, so the session credential
+never reaches a browser and the API needs no public origin allowance for it.
+
+`migrate` restarts **NEVER**. A failed migration is a signal to look at
+something, not to retry in a loop against a half-applied schema.
 
 ### Why the worker is separate, and why it is not optional
 

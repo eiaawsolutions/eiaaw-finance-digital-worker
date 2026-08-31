@@ -66,12 +66,10 @@ async function main(): Promise<void> {
         '  entered by a human at enrolment; until then the settings-health endpoint\n' +
         '  reports this tenant as not ready and no SOP will run.\n',
     );
-
-    process.exit(0);
   } catch (error) {
     console.error('\nSeed failed:\n');
     console.error(error instanceof Error ? error.message : error);
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
     await closeDatabase(db);
   }

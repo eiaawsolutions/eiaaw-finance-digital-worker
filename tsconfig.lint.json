@@ -28,6 +28,7 @@
     "*.ts",
     "*.js",
     "*.mjs",
+    ".railway/*.ts",
     "scripts/**/*.ts",
     "test/**/*.ts",
     "packages/**/*.ts",

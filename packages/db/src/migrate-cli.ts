@@ -29,6 +29,10 @@ async function main(): Promise<void> {
     statementTimeoutMs: 300_000,
   });
 
+  // Sets process.exitCode and returns rather than calling process.exit().
+  // process.exit() terminates before a pending stdout write or the `finally`
+  // below has completed — and this command is chained with `&&` in the release
+  // step, so a truncated exit silently skips the seed that follows it.
   try {
     if (process.argv.includes('--status')) {
       const rows = await migrationStatus(db, MIGRATIONS_DIR);
@@ -42,7 +46,8 @@ async function main(): Promise<void> {
         console.log(`  ${row.id.padEnd(40)} ${state}`);
       }
       const mismatched = rows.filter((r) => r.checksumMatches === false);
-      process.exit(mismatched.length > 0 ? 1 : 0);
+      process.exitCode = mismatched.length > 0 ? 1 : 0;
+      return;
     }
 
     const result = await runMigrations(db, MIGRATIONS_DIR, (m) => console.log(m));
@@ -50,11 +55,10 @@ async function main(): Promise<void> {
       `\nMigrations complete in ${result.durationMs}ms — ` +
         `${result.applied.length} applied, ${result.skipped.length} already present.`,
     );
-    process.exit(0);
   } catch (error) {
     console.error('\nMigration failed:\n');
     console.error(error instanceof Error ? error.message : error);
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
     await closeDatabase(db);
   }

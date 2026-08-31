@@ -22,3 +22,6 @@ Thumbs.db
 
 # Assurance harness run output
 assurance-runs/
+
+# Railway CLI scratch directories from `railway config pull`
+.railway-config-pull-*/
