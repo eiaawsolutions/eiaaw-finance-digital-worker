@@ -1,0 +1,53 @@
+{
+  "name": "@eiaaw/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "exports": {
+    ".": {
+      "types": "./dist/main.d.ts",
+      "default": "./dist/main.js"
+    },
+    "./container": {
+      "types": "./dist/container.d.ts",
+      "default": "./dist/container.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx watch --tsconfig ../../tsconfig.dev.json src/main.ts",
+    "start": "node dist/main.js",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@eiaaw/assurance": "workspace:*",
+    "@eiaaw/audit": "workspace:*",
+    "@eiaaw/authorisation": "workspace:*",
+    "@eiaaw/channels": "workspace:*",
+    "@eiaaw/config": "workspace:*",
+    "@eiaaw/connectors": "workspace:*",
+    "@eiaaw/context": "workspace:*",
+    "@eiaaw/contracts": "workspace:*",
+    "@eiaaw/core": "workspace:*",
+    "@eiaaw/db": "workspace:*",
+    "@eiaaw/delivery": "workspace:*",
+    "@eiaaw/intake": "workspace:*",
+    "@eiaaw/knowledge": "workspace:*",
+    "@eiaaw/llm": "workspace:*",
+    "@eiaaw/planner": "workspace:*",
+    "@eiaaw/policy": "workspace:*",
+    "@eiaaw/registry": "workspace:*",
+    "@eiaaw/skills": "workspace:*",
+    "@eiaaw/telemetry": "workspace:*",
+    "@eiaaw/workflow": "workspace:*",
+    "@fastify/cors": "^10.0.1",
+    "@fastify/helmet": "^13.0.1",
+    "@fastify/rate-limit": "^10.2.1",
+    "fastify": "^5.2.1"
+  }
+}

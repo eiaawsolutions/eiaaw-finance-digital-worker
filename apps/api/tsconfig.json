@@ -1,0 +1,31 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/telemetry" },
+    { "path": "../../packages/db" },
+    { "path": "../../packages/audit" },
+    { "path": "../../packages/config" },
+    { "path": "../../packages/registry" },
+    { "path": "../../packages/policy" },
+    { "path": "../../packages/context" },
+    { "path": "../../packages/knowledge" },
+    { "path": "../../packages/llm" },
+    { "path": "../../packages/connectors" },
+    { "path": "../../packages/assurance" },
+    { "path": "../../packages/skills" },
+    { "path": "../../packages/planner" },
+    { "path": "../../packages/intake" },
+    { "path": "../../packages/workflow" },
+    { "path": "../../packages/channels" },
+    { "path": "../../packages/delivery" },
+    { "path": "../../packages/authorisation" }
+  ]
+}

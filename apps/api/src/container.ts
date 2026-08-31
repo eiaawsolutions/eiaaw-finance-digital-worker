@@ -1,0 +1,249 @@
+/**
+ * The composition root.
+ *
+ * Every component is constructed here, once, and wired in the order the build
+ * graph requires (DWD-06 s.15): foundations → audit → configuration → context →
+ * knowledge → registries → tool invoker → assurance → orchestration → skill
+ * runtime → delivery → authorisation.
+ *
+ * The order is not decorative. s.15.1: "Never build a layer whose dependencies
+ * are stubbed by something that acts." Constructing in build order means a
+ * missing dependency fails at boot rather than at the first request.
+ */
+import { type AppConfig, loadConfig, money } from '@eiaaw/core';
+import {
+  type Database,
+  type ObjectStore,
+  closeDatabase,
+  createDatabase,
+  createObjectStore,
+} from '@eiaaw/db';
+import { AuditStore, EvidenceStore, emitterFor, type AuditEmitter } from '@eiaaw/audit';
+import { ConfigService } from '@eiaaw/config';
+import { ContextResolver } from '@eiaaw/context';
+import { KnowledgeService, createEmbeddingProvider } from '@eiaaw/knowledge';
+import { SkillRegistry } from '@eiaaw/registry';
+import { PolicyEngine } from '@eiaaw/policy';
+import { LlmGateway, StubProvider, AnthropicProvider, type ModelProvider } from '@eiaaw/llm';
+import { CalculationConnector, ToolInvoker, stubConnectors } from '@eiaaw/connectors';
+import { SkillRuntime } from '@eiaaw/skills';
+import { Planner } from '@eiaaw/planner';
+import { WorkflowExecutor } from '@eiaaw/workflow';
+import { HandoffService, ScopeCardService } from '@eiaaw/authorisation';
+import { DeliveryService } from '@eiaaw/delivery';
+import { ALL_CAPABILITIES, type ChannelAdapter, type ChannelName } from '@eiaaw/channels';
+import { HARNESS_VERSION } from '@eiaaw/assurance';
+import {
+  createLogger,
+  initTelemetry,
+  metricRegistry,
+  shutdownTelemetry,
+  type Logger,
+} from '@eiaaw/telemetry';
+
+export interface Container {
+  readonly config: AppConfig;
+  readonly log: Logger;
+  readonly db: Database;
+  readonly objects: ObjectStore;
+  readonly audit: AuditStore;
+  readonly evidence: EvidenceStore;
+  readonly emitter: (component: Parameters<typeof emitterFor>[1]) => AuditEmitter;
+  readonly settings: ConfigService;
+  readonly context: ContextResolver;
+  readonly knowledge: KnowledgeService;
+  readonly skills: SkillRegistry;
+  readonly policy: PolicyEngine;
+  readonly gateway: LlmGateway;
+  readonly tools: ToolInvoker;
+  readonly runtime: SkillRuntime;
+  readonly planner: Planner;
+  readonly workflow: WorkflowExecutor;
+  readonly handoffs: HandoffService;
+  readonly scopeCards: ScopeCardService;
+  readonly delivery: DeliveryService;
+  shutdown(): Promise<void>;
+}
+
+export async function buildContainer(
+  adapters: ReadonlyMap<ChannelName, ChannelAdapter> = new Map(),
+): Promise<Container> {
+  // --- S1 foundations ----------------------------------------------------
+  const config = await loadConfig();
+
+  initTelemetry({
+    serviceName: config.observability.serviceName,
+    platformVersion: config.platformVersion,
+    environment: config.deployEnvironment,
+    residencyZone: config.residencyZone,
+    otlpEndpoint: config.observability.otlpEndpoint,
+    conformanceStrict: config.observability.conformanceStrict,
+  });
+  metricRegistry.init();
+
+  const log = createLogger({
+    level: config.observability.logLevel,
+    serviceName: config.observability.serviceName,
+    environment: config.deployEnvironment,
+    pretty: config.deployEnvironment === 'dev',
+  });
+
+  const db = createDatabase({
+    url: config.database.url,
+    poolMax: config.database.poolMax,
+    ssl: config.database.ssl,
+    applicationName: 'eiaaw-fdw-api',
+  });
+
+  const objects = createObjectStore({
+    db,
+    residencyZone: config.residencyZone,
+    driver: config.objectStore.driver,
+    localPath: config.objectStore.localPath,
+  });
+
+  // --- S2 audit — before anything that can act ---------------------------
+  const audit = new AuditStore({
+    db,
+    residencyZone: config.residencyZone,
+    payloadSink: {
+      put: async (tenantId, key, body) => {
+        const stored = await objects.put({
+          tenantId,
+          objectClass: 'audit_payload',
+          body,
+          mediaType: 'application/json',
+          key,
+        });
+        return stored.storage_ref;
+      },
+    },
+  });
+
+  const evidence = new EvidenceStore({
+    db,
+    residencyZone: config.residencyZone,
+    platformVersion: config.platformVersion,
+  });
+
+  // --- S3 configuration --------------------------------------------------
+  const settings = new ConfigService({ db, residencyZone: config.residencyZone });
+
+  // --- S4 context --------------------------------------------------------
+  const context = new ContextResolver({
+    db,
+    config: settings,
+    residencyZone: config.residencyZone,
+  });
+
+  // --- S5 knowledge ------------------------------------------------------
+  const knowledge = new KnowledgeService({
+    db,
+    residencyZone: config.residencyZone,
+    embeddings: createEmbeddingProvider({ deployEnvironment: config.deployEnvironment }),
+  });
+
+  // --- S6 registries -----------------------------------------------------
+  const skills = new SkillRegistry(db, config.residencyZone);
+
+  // --- S7 tool invoker — before orchestration ----------------------------
+  const tools = new ToolInvoker({
+    db,
+    residencyZone: config.residencyZone,
+    // Derived from the environment, never read from configuration.
+    forceDryRun: config.forceDryRun,
+    connectors: [new CalculationConnector(), ...stubConnectors()],
+  });
+
+  // --- S9/S10 policy, gateway, skill runtime -----------------------------
+  const policy = new PolicyEngine({ db, config: settings, residencyZone: config.residencyZone });
+
+  const providers = new Map<string, ModelProvider>();
+  providers.set('stub', new StubProvider());
+  // The model and provider a tenant uses come from AS-SYS-040; this registers
+  // the credential so a route naming "anthropic" can resolve.
+  providers.set('anthropic', new AnthropicProvider(config.crypto.kmsMasterKey));
+
+  const gateway = new LlmGateway({
+    providers,
+    globalCostCeiling: money(config.llm.globalCostCeilingMinor, config.llm.globalCostCurrency),
+  });
+
+  const runtime = new SkillRuntime({
+    db,
+    residencyZone: config.residencyZone,
+    knowledge,
+    gateway,
+    harnessVersion: HARNESS_VERSION,
+  });
+
+  const planner = new Planner({
+    db,
+    residencyZone: config.residencyZone,
+    config: settings,
+    skills,
+    forceDryRun: config.forceDryRun,
+  });
+
+  const workflow = new WorkflowExecutor({
+    db,
+    residencyZone: config.residencyZone,
+    audit: emitterFor(audit, 'C7'),
+    logger: log,
+    leaseSeconds: config.workflow.leaseSeconds,
+  });
+
+  // --- S11 delivery ------------------------------------------------------
+  const delivery = new DeliveryService({
+    db,
+    residencyZone: config.residencyZone,
+    adapters,
+    capabilities: ALL_CAPABILITIES,
+  });
+
+  // --- S12 authorisation -------------------------------------------------
+  const handoffs = new HandoffService({
+    db,
+    residencyZone: config.residencyZone,
+    nonceSigningKey: config.crypto.nonceSigningKey,
+  });
+
+  const scopeCards = new ScopeCardService(db, config.residencyZone);
+
+  // `environment` is already a base binding on the logger; repeating it here
+  // emitted the key twice in one JSON object, which some log ingesters reject
+  // and others silently pick a winner from.
+  log.info('container built', {
+    residency_zone: config.residencyZone,
+    platform_version: config.platformVersion,
+    force_dry_run: config.forceDryRun,
+  });
+
+  return {
+    config,
+    log,
+    db,
+    objects,
+    audit,
+    evidence,
+    emitter: (component) => emitterFor(audit, component),
+    settings,
+    context,
+    knowledge,
+    skills,
+    policy,
+    gateway,
+    tools,
+    runtime,
+    planner,
+    workflow,
+    handoffs,
+    scopeCards,
+    delivery,
+    async shutdown() {
+      log.info('shutting down');
+      await shutdownTelemetry();
+      await closeDatabase(db);
+    },
+  };
+}

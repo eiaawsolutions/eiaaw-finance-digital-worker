@@ -1,0 +1,28 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/contracts" },
+    { "path": "packages/telemetry" },
+    { "path": "packages/db" },
+    { "path": "packages/audit" },
+    { "path": "packages/config" },
+    { "path": "packages/context" },
+    { "path": "packages/knowledge" },
+    { "path": "packages/registry" },
+    { "path": "packages/policy" },
+    { "path": "packages/workflow" },
+    { "path": "packages/connectors" },
+    { "path": "packages/llm" },
+    { "path": "packages/skills" },
+    { "path": "packages/planner" },
+    { "path": "packages/intake" },
+    { "path": "packages/assurance" },
+    { "path": "packages/channels" },
+    { "path": "packages/delivery" },
+    { "path": "packages/authorisation" },
+    { "path": "apps/api" },
+    { "path": "apps/worker" },
+    { "path": "packages/db/tsconfig.scripts.json" }
+  ]
+}

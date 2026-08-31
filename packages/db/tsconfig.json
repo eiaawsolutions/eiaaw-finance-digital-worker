@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts"],
+  // seed-cli.ts is typechecked by tsconfig.scripts.json — see the note there.
+  "exclude": ["src/**/*.test.ts", "src/seed-cli.ts"],
+  "references": [{ "path": "../core" }, { "path": "../contracts" }, { "path": "../telemetry" }]
+}

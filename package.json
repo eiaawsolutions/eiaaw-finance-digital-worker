@@ -1,0 +1,60 @@
+{
+  "name": "@eiaaw/finance-digital-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EIAAW Finance Expert digital worker — governed accounting and finance agent across email, in-app chat, Telegram and WhatsApp.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22.11.0",
+    "pnpm": ">=9.12.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter \"./packages/**\" run build && pnpm -r --filter \"./apps/**\" run build",
+    "typecheck": "tsc -b tsconfig.build.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml,css}\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "db:generate": "pnpm --filter @eiaaw/db run generate",
+    "db:migrate": "pnpm --filter @eiaaw/db run migrate",
+    "db:seed": "pnpm --filter @eiaaw/db run seed",
+    "assurance:run": "pnpm --filter @eiaaw/assurance run harness",
+    "assurance:gate": "pnpm --filter @eiaaw/assurance run release-gate",
+    "conformance:observability": "pnpm --filter @eiaaw/telemetry run conformance",
+    "dev:api": "pnpm --filter @eiaaw/api run dev",
+    "dev:worker": "pnpm --filter @eiaaw/worker run dev",
+    "dev:console": "pnpm --filter @eiaaw/console run dev",
+    "dev": "concurrently -n api,worker,console -c cyan,magenta,green \"pnpm dev:api\" \"pnpm dev:worker\" \"pnpm dev:console\"",
+    "start:api": "node apps/api/dist/main.js",
+    "start:worker": "node apps/worker/dist/main.js",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm assurance:gate",
+    "prepare": "lefthook install || true"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@types/node": "^22.10.5",
+    "@vitest/coverage-v8": "^2.1.8",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.18.0",
+    "eslint-plugin-import": "^2.31.0",
+    "lefthook": "^1.10.1",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^2.1.8"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "typescript": "5"
+      }
+    }
+  }
+}

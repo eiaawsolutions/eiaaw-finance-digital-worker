@@ -1,0 +1,23 @@
+{
+  "name": "@eiaaw/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx watch --tsconfig ../../tsconfig.dev.json src/main.ts",
+    "start": "node dist/main.js",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@eiaaw/api": "workspace:*",
+    "@eiaaw/audit": "workspace:*",
+    "@eiaaw/authorisation": "workspace:*",
+    "@eiaaw/contracts": "workspace:*",
+    "@eiaaw/core": "workspace:*",
+    "@eiaaw/db": "workspace:*",
+    "@eiaaw/telemetry": "workspace:*",
+    "@eiaaw/workflow": "workspace:*"
+  }
+}

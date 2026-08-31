@@ -1,0 +1,24 @@
+node_modules/
+dist/
+dist-scripts/
+build/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+.env
+.env.*
+!.env.example
+
+.next/
+out/
+
+.DS_Store
+Thumbs.db
+
+# Local artefact + object-store emulation (never committed)
+.local-object-store/
+.local-worm/
+
+# Assurance harness run output
+assurance-runs/

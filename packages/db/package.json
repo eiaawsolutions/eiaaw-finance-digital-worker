@@ -1,0 +1,30 @@
+{
+  "name": "@eiaaw/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "migrate": "tsx --tsconfig ../../tsconfig.dev.json src/migrate-cli.ts",
+    "seed": "tsx --tsconfig ../../tsconfig.dev.json src/seed-cli.ts",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@eiaaw/contracts": "workspace:*",
+    "@eiaaw/core": "workspace:*",
+    "@eiaaw/telemetry": "workspace:*",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@eiaaw/config": "workspace:*",
+    "@eiaaw/registry": "workspace:*"
+  }
+}

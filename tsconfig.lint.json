@@ -1,0 +1,39 @@
+{
+  // The program ESLint's type-aware rules run against.
+  //
+  // The build graph (tsconfig.build.json) deliberately excludes test files,
+  // CLI scripts and config files from the emitted packages. Type-aware linting
+  // still has to see them, and the TypeScript project service will not lint a
+  // file that belongs to no project. This config is that project: one flat
+  // program over everything, emitting nothing.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "incremental": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "allowJs": true,
+    "checkJs": false,
+    "jsx": "preserve",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "paths": {
+      "@eiaaw/*": ["./packages/*/src/index.ts"],
+      "@/*": ["./apps/console/src/*"]
+    }
+  },
+  "include": [
+    "*.ts",
+    "*.js",
+    "*.mjs",
+    "scripts/**/*.ts",
+    "test/**/*.ts",
+    "packages/**/*.ts",
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "apps/**/*.mjs"
+  ],
+  "exclude": ["node_modules", "**/dist", "**/dist-scripts", "**/.next", "coverage"]
+}

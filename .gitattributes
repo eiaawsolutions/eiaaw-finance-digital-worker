@@ -1,0 +1,10 @@
+# The repository is authored on Windows and built on Linux. Normalising to LF
+# in the index and in the working tree keeps the container build, the shell
+# entrypoints and the Prettier check from disagreeing about line endings.
+* text=auto eol=lf
+
+# Generated; keep the diff out of review.
+pnpm-lock.yaml linguist-generated=true -diff
+
+# PowerShell is the one place CRLF is the native convention.
+*.ps1 text eol=crlf

@@ -1,0 +1,657 @@
+/* =============================================================================
+   EIAAW Finance Digital Worker — console
+
+   Design system: eiaaw-design-system.md (LOCKED 2026-04-19) plus the
+   eiaaw-app-shell.md addendum for dense application surfaces.
+
+   The locked :root block is copied VERBATIM. Every other colour in this file is
+   derived from it with color-mix(). There are no hex literals below the token
+   block — that is the addendum's adoption-checklist item 3, and it is checkable:
+
+       grep -n '#[0-9a-fA-F]\{3,6\}' globals.css
+
+   should return only the locked block.
+   ========================================================================== */
+
+/* --- the locked token block, verbatim ------------------------------------ */
+:root {
+  --bg: #faf7f2;
+  --bg-warm: #f3ede0;
+  --surface: #ffffff;
+
+  --ink: #0f1a1d;
+  --ink-2: #2a3438;
+  --mute: #6b7a7f;
+
+  --line: #d9cfbc;
+  --line-soft: #e8dfcc;
+
+  --primary: #1fa896;
+  --primary-dark: #11766a;
+  --primary-tint: #e5f4f1;
+
+  --danger: #b4412b;
+
+  --gradient: linear-gradient(135deg, #22b8a5 0%, #11766a 55%, #0a4d47 100%);
+
+  --serif: 'Instrument Serif', 'Times New Roman', serif;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* --- app-shell addendum: density scale ----------------------------------- */
+:root {
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 40px;
+  --sp-9: 56px;
+
+  /* Fixed, because a windowing library needs a known row height. */
+  --row-h: 36px;
+  --row-h-compact: 28px;
+  --pane-gap: 1px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --control-h: 32px;
+  --control-h-lg: 38px;
+
+  /* Reading text — prose a person reads at length. Never below 15px. */
+  --fs-read-sm: 15px;
+  --lh-read-sm: 1.55;
+  --fs-read: 16px;
+  --lh-read: 1.6;
+  --fs-read-lg: 17px;
+  --lh-read-lg: 1.6;
+
+  /* Data text — table cells, list rows, metadata. A cell is not prose. */
+  --fs-data-xs: 12px;
+  --lh-data-xs: 1.35;
+  --fs-data-sm: 13px;
+  --lh-data-sm: 1.4;
+  --fs-data: 14px;
+  --lh-data: 1.45;
+
+  --fs-h3: 15px;
+  --fs-h2: 17px;
+  --fs-h1: 20px;
+  --fs-mono: 11px;
+  --ls-mono: 0.12em;
+
+  /* Elevation by rule and ground, not by shadow. */
+  --app-bg: var(--bg);
+  --pane-bg: var(--surface);
+  --rail-bg: var(--bg-warm);
+  --hover-bg: color-mix(in oklab, var(--primary-tint) 55%, var(--surface));
+  --selected-bg: var(--primary-tint);
+  --overlay-scrim: color-mix(in oklab, var(--ink) 45%, transparent);
+
+  --shadow-pop:
+    0 1px 2px color-mix(in oklab, var(--ink) 8%, transparent),
+    0 8px 24px -6px color-mix(in oklab, var(--ink) 22%, transparent);
+
+  /* Severity ramp, mixed toward the warm ground rather than a generic
+     traffic light. Deliberately low-chroma at the middle steps — the LABEL
+     carries the meaning, the colour reinforces it (WCAG 1.4.1). */
+  --sev-critical: var(--danger);
+  --sev-material: color-mix(in oklab, var(--danger) 62%, var(--bg-warm));
+  --sev-note: var(--mute);
+  --sev-cleared: var(--primary-dark);
+
+  --sev-critical-bg: color-mix(in oklab, var(--danger) 10%, var(--surface));
+  --sev-material-bg: color-mix(in oklab, var(--danger) 6%, var(--surface));
+  --sev-note-bg: var(--surface);
+  --sev-cleared-bg: var(--primary-tint);
+
+  --t-fast: 120ms;
+  --t-base: 160ms;
+  --t-pane: 220ms;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--app-bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--fs-data);
+  line-height: var(--lh-data);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--primary-dark);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+/* --- the shell ----------------------------------------------------------- */
+.shell {
+  display: grid;
+  grid-template-columns: 248px 1fr;
+  height: 100dvh;
+}
+.shell > * + * {
+  border-left: 1px solid var(--line-soft);
+}
+
+.pane {
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.rail {
+  background: var(--rail-bg);
+  padding: var(--sp-5) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+
+/* --- the lockup, at 36px in an app sidebar ------------------------------- */
+.lockup {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  text-decoration: none;
+}
+.lockup-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--gradient);
+  display: grid;
+  place-items: center;
+  color: var(--surface);
+  font-family: var(--mono);
+  font-size: var(--fs-mono);
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.lockup-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+  min-width: 0;
+}
+.lockup-text strong {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--primary-dark);
+  text-transform: uppercase;
+}
+.lockup-text small {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--mute);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-mono);
+  margin-top: 2px;
+}
+
+/* --- navigation ---------------------------------------------------------- */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-group {
+  font-family: var(--mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--ls-mono);
+  text-transform: uppercase;
+  color: var(--mute);
+  margin: var(--sp-4) 0 var(--sp-2) var(--sp-2);
+}
+.nav a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  height: var(--control-h);
+  padding: 0 var(--sp-3);
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+  font-size: var(--fs-data);
+  transition: background var(--t-fast) var(--ease);
+}
+.nav a:hover {
+  background: var(--hover-bg);
+  text-decoration: none;
+}
+.nav a[aria-current='page'] {
+  background: var(--selected-bg);
+  color: var(--primary-dark);
+  font-weight: 500;
+}
+
+/* --- content ------------------------------------------------------------- */
+.content {
+  padding: var(--sp-6) var(--sp-7) var(--sp-9);
+  max-width: 1180px;
+}
+
+.page-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-2);
+}
+h1 {
+  font-size: var(--fs-h1);
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+h2 {
+  font-size: var(--fs-h2);
+  font-weight: 600;
+  margin: var(--sp-7) 0 var(--sp-3);
+}
+h3 {
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  margin: var(--sp-5) 0 var(--sp-2);
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: var(--fs-mono);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--ls-mono);
+  color: var(--primary-dark);
+}
+
+.lede {
+  font-size: var(--fs-read-sm);
+  line-height: var(--lh-read-sm);
+  color: var(--ink-2);
+  max-width: 72ch;
+  margin: 0 0 var(--sp-6);
+}
+.prose {
+  font-size: var(--fs-read-sm);
+  line-height: var(--lh-read-sm);
+  color: var(--ink-2);
+  max-width: 72ch;
+}
+
+/* --- panels: flat, separated by rule ------------------------------------- */
+.panel {
+  background: var(--pane-bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  padding: var(--sp-5);
+}
+.panel + .panel {
+  margin-top: var(--sp-4);
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+.panel-title {
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  margin: 0;
+}
+
+.grid {
+  display: grid;
+  gap: var(--sp-4);
+}
+.grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+/* --- the four governance metrics ----------------------------------------- */
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.metric-label {
+  font-family: var(--mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--ls-mono);
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.metric-value {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.metric-note {
+  font-size: var(--fs-data-xs);
+  color: var(--mute);
+}
+
+/* --- tables: row rules, no zebra, tabular numerals ----------------------- */
+.tbl {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-data-sm);
+}
+.tbl thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--rail-bg);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--ls-mono);
+  text-transform: uppercase;
+  color: var(--mute);
+  font-weight: 500;
+  text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  white-space: nowrap;
+}
+.tbl tbody td {
+  height: var(--row-h);
+  padding: 0 var(--sp-3);
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-2);
+}
+.tbl tbody tr:hover td {
+  background: var(--hover-bg);
+}
+.tbl tbody tr[aria-selected='true'] td {
+  background: var(--selected-bg);
+}
+.tbl .num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.tbl-wrap {
+  overflow-x: auto;
+}
+
+/* --- severity: colour + label + rule weight, always all three ------------ */
+.sev {
+  border-left-style: solid;
+  padding-left: var(--sp-3);
+}
+.sev--critical {
+  border-left-width: 3px;
+  border-left-color: var(--sev-critical);
+}
+.sev--material {
+  border-left-width: 2px;
+  border-left-color: var(--sev-material);
+}
+.sev--note {
+  border-left-width: 1px;
+  border-left-color: var(--sev-note);
+}
+.sev--cleared {
+  border-left-width: 1px;
+  border-left-color: var(--sev-cleared);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-family: var(--mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--ls-mono);
+  text-transform: uppercase;
+  padding: 3px var(--sp-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  background: var(--surface);
+  white-space: nowrap;
+}
+.chip--critical {
+  color: var(--sev-critical);
+  background: var(--sev-critical-bg);
+  border-color: var(--sev-critical);
+}
+.chip--material {
+  color: var(--sev-critical);
+  background: var(--sev-material-bg);
+  border-color: var(--sev-material);
+}
+.chip--cleared {
+  color: var(--sev-cleared);
+  background: var(--sev-cleared-bg);
+  border-color: var(--sev-cleared);
+}
+.chip--note {
+  color: var(--mute);
+}
+
+/* --- the draft watermark: a compliance surface, not decoration ----------- */
+.draft-banner {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--sev-critical-bg);
+  border-bottom: 1px solid var(--danger);
+  color: var(--danger);
+  font-family: var(--mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--ls-mono);
+  text-transform: uppercase;
+  padding: var(--sp-2) var(--sp-4);
+}
+.draft-surface {
+  position: relative;
+}
+.draft-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Below ~5% so it survives a screenshot as "not approved" while leaving
+     body text at full reading contrast. */
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 22px,
+    color-mix(in oklab, var(--danger) 4%, transparent) 22px 44px
+  );
+}
+
+/* --- citations and provenance -------------------------------------------- */
+.cite {
+  border-bottom: 1px dashed var(--primary-dark);
+  cursor: help;
+  text-underline-offset: 2px;
+}
+.cite:hover,
+.cite:focus-visible {
+  background: var(--primary-tint);
+}
+.cite--removed {
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+  color: var(--mute);
+  background: var(--sev-critical-bg);
+}
+
+/* --- controls ------------------------------------------------------------ */
+.ctl {
+  height: var(--control-h);
+  padding: 0 var(--sp-3);
+  font-family: var(--sans);
+  font-size: var(--fs-data);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  transition:
+    border-color var(--t-base) var(--ease),
+    background var(--t-base) var(--ease);
+}
+.ctl:hover {
+  border-color: var(--mute);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: var(--control-h);
+  padding: 0 var(--sp-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-data);
+  font-family: var(--sans);
+  cursor: pointer;
+  transition:
+    background var(--t-base) var(--ease),
+    border-color var(--t-base) var(--ease);
+}
+.btn--primary {
+  background: var(--ink);
+  color: var(--bg);
+  border: 1px solid var(--ink);
+}
+.btn--primary:hover {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+}
+.btn--ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+}
+.btn--ghost:hover {
+  background: var(--hover-bg);
+}
+.btn--danger {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+.btn--danger:hover {
+  background: var(--sev-critical-bg);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-row {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+/* --- key/value ----------------------------------------------------------- */
+.kv {
+  display: grid;
+  grid-template-columns: minmax(140px, 200px) 1fr;
+  gap: var(--sp-2) var(--sp-4);
+}
+.kv dt {
+  font-family: var(--mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--ls-mono);
+  text-transform: uppercase;
+  color: var(--mute);
+  padding-top: 2px;
+}
+.kv dd {
+  margin: 0;
+  font-size: var(--fs-data);
+  color: var(--ink-2);
+  min-width: 0;
+  word-break: break-word;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: var(--fs-data-xs);
+  color: var(--ink-2);
+}
+.muted {
+  color: var(--mute);
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  padding: var(--sp-8) var(--sp-5);
+  text-align: center;
+  color: var(--mute);
+  font-size: var(--fs-data);
+}
+
+.notice {
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-data);
+  background: var(--surface);
+}
+.notice--refusal {
+  border-left-color: var(--danger);
+  background: var(--sev-critical-bg);
+}
+.notice--refusal .notice-body {
+  white-space: pre-wrap;
+  font-size: var(--fs-read-sm);
+  line-height: var(--lh-read-sm);
+}
+.notice--ok {
+  border-left-color: var(--primary-dark);
+  background: var(--sev-cleared-bg);
+}
+
+.footnote {
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line-soft);
+  font-size: var(--fs-data-xs);
+  color: var(--mute);
+  max-width: 78ch;
+}

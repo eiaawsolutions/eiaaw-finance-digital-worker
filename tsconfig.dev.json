@@ -1,0 +1,39 @@
+{
+  // Used ONLY by `tsx`-run scripts (the assurance harness, the observability
+  // conformance job, migrations, seeds) so they resolve workspace packages to
+  // source rather than to a `dist` that may not exist yet.
+  //
+  // It is deliberately NOT the base config: adding these paths to the compiled
+  // build would defeat TypeScript project references, which need each package
+  // to consume its dependencies' emitted declarations.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "baseUrl": ".",
+    "paths": {
+      "@eiaaw/core": ["packages/core/src/index.ts"],
+      "@eiaaw/contracts": ["packages/contracts/src/index.ts"],
+      "@eiaaw/telemetry": ["packages/telemetry/src/index.ts"],
+      "@eiaaw/db": ["packages/db/src/index.ts"],
+      "@eiaaw/audit": ["packages/audit/src/index.ts"],
+      "@eiaaw/config": ["packages/config/src/index.ts"],
+      "@eiaaw/context": ["packages/context/src/index.ts"],
+      "@eiaaw/knowledge": ["packages/knowledge/src/index.ts"],
+      "@eiaaw/registry": ["packages/registry/src/index.ts"],
+      "@eiaaw/policy": ["packages/policy/src/index.ts"],
+      "@eiaaw/workflow": ["packages/workflow/src/index.ts"],
+      "@eiaaw/connectors": ["packages/connectors/src/index.ts"],
+      "@eiaaw/llm": ["packages/llm/src/index.ts"],
+      "@eiaaw/skills": ["packages/skills/src/index.ts"],
+      "@eiaaw/planner": ["packages/planner/src/index.ts"],
+      "@eiaaw/intake": ["packages/intake/src/index.ts"],
+      "@eiaaw/assurance": ["packages/assurance/src/index.ts"],
+      "@eiaaw/channels": ["packages/channels/src/index.ts"],
+      "@eiaaw/delivery": ["packages/delivery/src/index.ts"],
+      "@eiaaw/authorisation": ["packages/authorisation/src/index.ts"],
+      "@eiaaw/api/container": ["apps/api/src/container.ts"],
+      "@eiaaw/api/server": ["apps/api/src/server.ts"]
+    }
+  }
+}

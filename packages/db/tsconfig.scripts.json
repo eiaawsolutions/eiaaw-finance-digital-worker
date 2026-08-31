@@ -1,0 +1,16 @@
+{
+  // The seed CLI is a developer entrypoint, not part of the library.
+  //
+  // It reaches "upward" into @eiaaw/config and @eiaaw/registry to load the
+  // settings catalogue and the tool/output-class registers — packages that
+  // themselves depend on @eiaaw/db. Compiling it inside the db project would
+  // make db depend on its own dependents, so it is typechecked here instead,
+  // into a throwaway outDir that nothing imports. It runs via tsx.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist-scripts"
+  },
+  "include": ["src/seed-cli.ts"],
+  "references": [{ "path": "./tsconfig.json" }, { "path": "../config" }, { "path": "../registry" }]
+}

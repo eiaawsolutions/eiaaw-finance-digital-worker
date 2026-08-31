@@ -1,0 +1,36 @@
+# Write-time quality gates. These run before the code exists in history,
+# which is the only point at which they are cheap.
+
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      glob: '*.{ts,tsx,js,json,md,yml,yaml,css}'
+      run: pnpm prettier --write {staged_files}
+      stage_fixed: true
+    lint:
+      glob: '*.{ts,tsx}'
+      run: pnpm eslint --fix {staged_files}
+      stage_fixed: true
+    secrets:
+      # No {staged_files}: the scanner asks git itself. A large commit passes
+      # more paths than a Windows command line holds, and a scanner that errors
+      # out instead of scanning is worse than no scanner.
+      run: pnpm tsx scripts/scan-secrets.ts
+
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm commitlint --edit {1}
+
+pre-push:
+  parallel: false
+  commands:
+    typecheck:
+      run: pnpm typecheck
+    test:
+      run: pnpm test
+    # DWD-06 s.0: the evaluation gate cannot be deferred. It runs before push,
+    # not only in CI, because a red gate must never reach a shared branch.
+    assurance-gate:
+      run: pnpm assurance:gate
