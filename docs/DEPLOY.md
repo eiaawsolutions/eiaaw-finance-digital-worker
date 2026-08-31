@@ -79,7 +79,7 @@ produce evidence that disagrees with itself.
 
 | Service   | Start command                        | Replicas    | Restart    |
 | --------- | ------------------------------------ | ----------- | ---------- |
-| `migrate` | `pnpm db:migrate && pnpm db:seed`    | 1, run-once | NEVER      |
+| `migrate` | `pnpm db:release`                    | 1, run-once | NEVER      |
 | `api`     | `node apps/api/dist/main.js`         | 2           | ON_FAILURE |
 | `worker`  | `node apps/worker/dist/main.js`      | 1           | ON_FAILURE |
 | `console` | `pnpm --filter @eiaaw/console start` | 1           | ON_FAILURE |
@@ -164,17 +164,28 @@ supervisor, and a policy verdict. `prod` removes one of five locks.
 
 ## 4. Deploy
 
+All four services build from GitHub, so the deploy is:
+
 ```bash
-railway up --service migrate     # wait for it to exit 0
-railway up --service api
-railway up --service worker
-railway up --service console
+git push                         # code changes
+railway config apply             # infrastructure changes
 ```
 
-The `migrate` service is run-once. Its migration runner takes a Postgres
-advisory lock, so running it concurrently with a rolling API deploy is safe —
-but running it first means the API never boots against a schema it does not
-expect.
+A push rebuilds and redeploys every service. `railway up` uploads the working
+directory instead and is for debugging a change you have not committed — what it
+deploys is not in history, so never leave a service on one.
+
+Watch it land:
+
+```bash
+railway service list             # per-service status
+railway logs --service migrate --deployment
+```
+
+The `migrate` service is run-once and its output is worth reading rather than
+just its exit code — the field, class and tool counts it prints are how you
+notice a registry that did not publish. Its migration runner takes a Postgres
+advisory lock, so overlapping it with a rolling API deploy is safe.
 
 ---
 
