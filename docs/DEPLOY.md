@@ -115,32 +115,36 @@ in-process loops are cheaper than another container.
 
 ## 3. Environment
 
-Set these on **every** service (Railway shared variables are the easy way):
+Every non-secret variable and every `secret://` handle is already declared in
+`.railway/railway.ts` and applied by `railway config apply`. There is nothing to
+type for those.
 
-```bash
-# The three bootstrap credentials — the only raw secrets anywhere.
-railway variables --set INFISICAL_APP_CLIENT_ID=...
-railway variables --set INFISICAL_APP_CLIENT_SECRET=...
-railway variables --set INFISICAL_PROJECT_ID=...
-railway variables --set INFISICAL_ENVIRONMENT=prod
-railway variables --set INFISICAL_RESOLVER_ENABLED=true
+**Exactly three variables are set by a human, and only in the Railway
+dashboard.** They are declared in the IaC with `preserve()`, which means the
+config requires them and never writes them — so they never pass through a
+commit, a chat message, a screenshot, or an agent session.
 
-# Runtime identity.
-railway variables --set DEPLOY_ENVIRONMENT=prod
-railway variables --set RESIDENCY_ZONE=my-central
-railway variables --set PLATFORM_VERSION=0.1.0
-railway variables --set DATABASE_SSL=true
+On **api** and **worker** (Railway shared variables set both at once):
 
-# Everything else is a HANDLE, not a value.
-railway variables --set AUDIT_CHAIN_ANCHOR_KEY=secret://eiaaw-fdw/prod/crypto/AUDIT_CHAIN_ANCHOR_KEY
-railway variables --set KMS_MASTER_KEY=secret://eiaaw-fdw/prod/crypto/KMS_MASTER_KEY
-railway variables --set NONCE_SIGNING_KEY=secret://eiaaw-fdw/prod/crypto/NONCE_SIGNING_KEY
-railway variables --set SESSION_SIGNING_KEY=secret://eiaaw-fdw/prod/crypto/SESSION_SIGNING_KEY
-railway variables --set SECRET_CANARY=secret://eiaaw-fdw/prod/crypto/SECRET_CANARY
-railway variables --set ANTHROPIC_API_KEY=secret://eiaaw-fdw/prod/llm/ANTHROPIC_API_KEY
-```
+| Variable                      | Where it comes from                        |
+| ----------------------------- | ------------------------------------------ |
+| `INFISICAL_APP_CLIENT_ID`     | the `eiaaw-fdw-app` machine identity       |
+| `INFISICAL_APP_CLIENT_SECRET` | the same identity                          |
+| `INFISICAL_PROJECT_ID`        | the Infisical project for `eiaaw-fdw-prod` |
 
-See `.env.example` for the complete list. Every variable there is either a
+Use the `eiaaw-fdw-app` identity, which holds `secrets:read`. **Not**
+`mcp-reader` — that one holds `secrets:list` only, by design, and the app needs
+to read values.
+
+Until all three are set, the API and worker refuse to start with:
+
+> Infisical resolution is enabled but the bootstrap credentials are incomplete
+> … do not work around this by setting raw values for the secrets they unlock.
+
+That is the system working. The alternative — a process that boots and then
+discovers mid-request that it cannot decrypt an audit payload — is worse.
+
+See `.env.example` for the complete variable list. Every entry there is either a
 bootstrap credential, a non-secret setting, or a handle.
 
 ### `DEPLOY_ENVIRONMENT=prod` is load-bearing

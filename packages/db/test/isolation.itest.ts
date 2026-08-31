@@ -505,16 +505,25 @@ describeIfDb('storage invariants', () => {
         `;
       });
 
-      await expect(
-        withTenant(db, { tenantId: TENANT_A, residencyZone: ZONE }, async (scope) => {
-          await scope.sql`
-            INSERT INTO settings_values (tenant_id, field_id, value, is_tbc, value_hash,
-                                         effective_from, set_by)
-            VALUES (${TENANT_A}, 'AS-RUL-999', '5'::jsonb, true,
-                    ${`sha256:${'0'.repeat(64)}`}, '2026-01-01', 'tester')
-          `;
-        }),
-      ).rejects.toThrow(/settings_values_tbc_has_no_value/);
+      try {
+        await expect(
+          withTenant(db, { tenantId: TENANT_A, residencyZone: ZONE }, async (scope) => {
+            await scope.sql`
+              INSERT INTO settings_values (tenant_id, field_id, value, is_tbc, value_hash,
+                                           effective_from, set_by)
+              VALUES (${TENANT_A}, 'AS-RUL-999', '5'::jsonb, true,
+                      ${`sha256:${'0'.repeat(64)}`}, '2026-01-01', 'tester')
+            `;
+          }),
+        ).rejects.toThrow(/settings_values_tbc_has_no_value/);
+      } finally {
+        // The catalogue is platform-owned and shared. A fixture field left
+        // behind counts toward enrolment readiness for every tenant in this
+        // database, so it is removed whether the assertion passed or not.
+        await withPlatformScope(db, async (sql) => {
+          await sql`DELETE FROM settings_catalogue WHERE field_id = 'AS-RUL-999'`;
+        });
+      }
     });
   });
 

@@ -38,6 +38,15 @@ async function main(): Promise<void> {
     const catalogue = await seedCatalogue(db);
     console.log(`  AS- field catalogue     ${catalogue.total} fields`);
 
+    if (catalogue.unrecognised.length > 0) {
+      console.warn(
+        `\n  ! ${catalogue.unrecognised.length} catalogue row(s) this platform version no longer\n` +
+          `    defines: ${catalogue.unrecognised.join(', ')}\n` +
+          '    They still count toward enrolment readiness. Nothing was deleted — a stale\n' +
+          '    row may hold a value a client entered. Decide, then remove them deliberately.',
+      );
+    }
+
     const registries = await seedRegistries(db);
     console.log(`  output-class register   ${registries.output_classes} classes`);
     console.log(`  tool registry           ${registries.tools} tools`);

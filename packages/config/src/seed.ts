@@ -12,6 +12,16 @@ export interface SeedResult {
   readonly inserted: number;
   readonly updated: number;
   readonly total: number;
+  /**
+   * Rows present in the table that the shipped catalogue no longer defines.
+   *
+   * Reported, never deleted. A stale row is not harmless — settings-health
+   * counts it toward readiness, so a tenant can be held "not ready" by a
+   * mandatory field the platform stopped defining. But it may also hold a value
+   * a client entered, and dropping that silently would be worse than the
+   * confusion. Someone decides.
+   */
+  readonly unrecognised: readonly string[];
 }
 
 export async function seedCatalogue(
@@ -62,6 +72,12 @@ export async function seedCatalogue(
       SELECT count(*)::text AS count FROM settings_catalogue
     `;
 
+    const present = await sql<{ field_id: string }[]>`
+      SELECT field_id FROM settings_catalogue ORDER BY field_id
+    `;
+    const shipped = new Set(fields.map((f) => f.field_id));
+    const unrecognised = present.map((r) => r.field_id).filter((id) => !shipped.has(id));
+
     const beforeCount = Number(before[0]?.count ?? 0);
     const afterCount = Number(after[0]?.count ?? 0);
 
@@ -69,6 +85,7 @@ export async function seedCatalogue(
       inserted: afterCount - beforeCount,
       updated: fields.length - (afterCount - beforeCount),
       total: afterCount,
+      unrecognised,
     };
   });
 }
