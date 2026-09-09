@@ -58,6 +58,12 @@ export interface AppConfig {
   readonly llm: {
     readonly globalCostCeilingMinor: number;
     readonly globalCostCurrency: string;
+    /**
+     * Null when the deployment has no Anthropic credential. The provider is
+     * then not registered at all, so a tenant routed to it refuses rather than
+     * falling back to some other key (DWD-06 s.13: absence is a refusal).
+     */
+    readonly anthropicApiKey: SecretRef | null;
   };
 
   readonly webhooks: { readonly replayWindowSeconds: number };
@@ -243,6 +249,7 @@ export async function loadConfig(env: NodeJS.ProcessEnv = process.env): Promise<
     llm: {
       globalCostCeilingMinor: integer(env, 'LLM_GLOBAL_COST_CEILING_MINOR', 500_000),
       globalCostCurrency: optional(env, 'LLM_GLOBAL_COST_CURRENCY', 'MYR'),
+      anthropicApiKey: await resolveOptional('ANTHROPIC_API_KEY'),
     },
 
     webhooks: { replayWindowSeconds: integer(env, 'WEBHOOK_REPLAY_WINDOW_SECONDS', 300) },

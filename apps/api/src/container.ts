@@ -160,9 +160,19 @@ export async function buildContainer(
 
   const providers = new Map<string, ModelProvider>();
   providers.set('stub', new StubProvider());
-  // The model and provider a tenant uses come from AS-SYS-040; this registers
-  // the credential so a route naming "anthropic" can resolve.
-  providers.set('anthropic', new AnthropicProvider(config.crypto.kmsMasterKey));
+  // The model and provider a tenant uses come from AS-SYS-040. Register the
+  // Anthropic provider only when its own credential resolved: the gateway
+  // refuses a route to an unregistered provider, and a refusal is the correct
+  // outcome of a missing credential (DWD-06 s.13.3).
+  //
+  // This previously passed `config.crypto.kmsMasterKey`, which the provider
+  // would have sent to api.anthropic.com as the bearer credential on the first
+  // real call — handing a third party the key that derives every tenant's
+  // field-encryption keys. Never substitute one secret for another to make a
+  // constructor signature happy.
+  if (config.llm.anthropicApiKey) {
+    providers.set('anthropic', new AnthropicProvider(config.llm.anthropicApiKey));
+  }
 
   const gateway = new LlmGateway({
     providers,
