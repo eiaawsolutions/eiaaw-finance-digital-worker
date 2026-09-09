@@ -18,16 +18,54 @@ short and non-negotiable:
 If a step below ever seems to be asking you to paste an `sk-ant-…` into Railway,
 stop: that is not this runbook.
 
-**What I need from you before a production deploy:**
+**Which Infisical workspace this deployment uses.**
 
-| Item                                                                                                 | Why                                               |
-| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| Infisical project ID for `eiaaw-fdw-prod`                                                            | The resolver dereferences every handle against it |
-| Confirmation the `eiaaw-fdw-app` machine identity exists, scoped to that project with `secrets:read` | The app reads values with it                      |
-| Its `clientId` and `clientSecret`                                                                    | The only raw credentials that go into Railway     |
+As of 2026-09-09 this worker resolves against the **shared `eiaaw-all-projects`
+workspace**, using the shared EIAAW machine identity that already serves
+opspilot, eiaaw-smt and the proposal generator. That is a deliberate operator
+decision and a deviation from the contract's `<project>-prod` convention:
+
+- **Why**: the identity already exists and authenticates, and
+  `ANTHROPIC_API_KEY` plus the R2 credentials already live in that workspace.
+  It takes a provisioning step off the critical path.
+- **What it costs**: blast-radius separation. The audit-chain anchor key and the
+  KMS master key sit in the same workspace as every other EIAAW app's secrets,
+  read by an identity already spread across six services. Compromise of that
+  identity reaches this worker's integrity keys.
+
+If a client contract ever requires segregated key custody, create
+`eiaaw-fdw-prod`, move the `/crypto` folder into it, issue a dedicated
+`eiaaw-fdw-app` identity, and repoint `INFISICAL_PROJECT_ID`. Nothing else moves.
 
 Do **not** use the `mcp-reader` identity here. It holds `secrets:list` only, by
 design, and the app needs to read values.
+
+### The nine secrets this deployment reads
+
+The resolver dereferences a handle by its **environment, path and name** against
+`INFISICAL_PROJECT_ID` — the project segment in the handle is documentation.
+All nine must exist in `eiaaw-all-projects`, environment `prod`, or the service
+boots and then fails closed on the first resolution:
+
+| Path       | Secret                                                                                                  | Notes                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `/crypto`  | `AUDIT_CHAIN_ANCHOR_KEY`, `KMS_MASTER_KEY`, `NONCE_SIGNING_KEY`, `SESSION_SIGNING_KEY`, `SECRET_CANARY` | Generated for this worker; they exist nowhere else                         |
+| `/llm`     | `ANTHROPIC_API_KEY`                                                                                     | Copy of the value already at the workspace root                            |
+| `/storage` | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                               | Access key and secret exist at root; endpoint derives from `R2_ACCOUNT_ID` |
+
+The five `/crypto` keys are new random material, not third-party credentials.
+Generate each with:
+
+```bash
+openssl rand -base64 32
+```
+
+`SECRET_CANARY` is a sentinel: assurance case P0-7 asserts it never appears in a
+prompt or a log line. Give it a value you can grep for unambiguously.
+
+Create the three folders and all nine secrets **in the Infisical UI**. Secret
+creation is a human action by design — the MCP server has no `set` capability
+and no agent session writes secret values.
 
 ---
 
@@ -126,15 +164,16 @@ commit, a chat message, a screenshot, or an agent session.
 
 On **api** and **worker** (Railway shared variables set both at once):
 
-| Variable                      | Where it comes from                        |
-| ----------------------------- | ------------------------------------------ |
-| `INFISICAL_APP_CLIENT_ID`     | the `eiaaw-fdw-app` machine identity       |
-| `INFISICAL_APP_CLIENT_SECRET` | the same identity                          |
-| `INFISICAL_PROJECT_ID`        | the Infisical project for `eiaaw-fdw-prod` |
+| Variable                      | Where it comes from                       |
+| ----------------------------- | ----------------------------------------- |
+| `INFISICAL_APP_CLIENT_ID`     | the shared EIAAW machine identity         |
+| `INFISICAL_APP_CLIENT_SECRET` | the same identity                         |
+| `INFISICAL_PROJECT_ID`        | the workspace id for `eiaaw-all-projects` |
 
-Use the `eiaaw-fdw-app` identity, which holds `secrets:read`. **Not**
-`mcp-reader` — that one holds `secrets:list` only, by design, and the app needs
-to read values.
+The same three values are already set on opspilot, eiaaw-smt and the proposal
+generator, so the authoritative copy is whichever of those you trust most. Use
+an identity holding `secrets:read`. **Not** `mcp-reader` — that one holds
+`secrets:list` only, by design, and the app needs to read values.
 
 Until all three are set, the API and worker refuse to start with:
 

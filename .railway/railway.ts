@@ -72,21 +72,46 @@ export default defineRailway(() => {
     INFISICAL_RESOLVER_ENABLED: 'true',
 
     // --- everything below is a handle, never a value -----------------------
-    AUDIT_CHAIN_ANCHOR_KEY: 'secret://eiaaw-fdw/prod/crypto/AUDIT_CHAIN_ANCHOR_KEY',
-    KMS_MASTER_KEY: 'secret://eiaaw-fdw/prod/crypto/KMS_MASTER_KEY',
-    NONCE_SIGNING_KEY: 'secret://eiaaw-fdw/prod/crypto/NONCE_SIGNING_KEY',
-    SESSION_SIGNING_KEY: 'secret://eiaaw-fdw/prod/crypto/SESSION_SIGNING_KEY',
-    SECRET_CANARY: 'secret://eiaaw-fdw/prod/crypto/SECRET_CANARY',
+    //
+    // The project segment is `eiaaw-all-projects` — the shared EIAAW Infisical
+    // workspace — not a dedicated `eiaaw-fdw` one. That is a deliberate
+    // operator decision (2026-09-09), and it is a deviation from the deploy
+    // contract's `<project>-prod` convention, so the reasoning is recorded
+    // rather than left to be rediscovered:
+    //
+    //   - Chosen because the shared machine identity already works, and
+    //     ANTHROPIC_API_KEY and the R2 credentials already live in that
+    //     workspace. It removes a provisioning step from the critical path.
+    //   - It costs blast-radius separation. The audit-chain anchor key and the
+    //     KMS master key now sit in the same workspace as every other EIAAW
+    //     app's secrets, read by an identity already spread across six
+    //     services. Compromise of that identity reaches the finance worker's
+    //     integrity keys.
+    //
+    // If the finance worker ever takes on a client whose contract requires
+    // segregated key custody, this is the first thing to change: create
+    // `eiaaw-fdw-prod`, move the /crypto folder into it, and issue a dedicated
+    // `eiaaw-fdw-app` identity. Nothing else in this file has to move with it.
+    //
+    // Note the resolver dereferences a handle using its environment, path and
+    // name against INFISICAL_PROJECT_ID — the project segment is documentation.
+    // Keeping it honest is what stops a future reader hunting for a workspace
+    // that does not exist.
+    AUDIT_CHAIN_ANCHOR_KEY: 'secret://eiaaw-all-projects/prod/crypto/AUDIT_CHAIN_ANCHOR_KEY',
+    KMS_MASTER_KEY: 'secret://eiaaw-all-projects/prod/crypto/KMS_MASTER_KEY',
+    NONCE_SIGNING_KEY: 'secret://eiaaw-all-projects/prod/crypto/NONCE_SIGNING_KEY',
+    SESSION_SIGNING_KEY: 'secret://eiaaw-all-projects/prod/crypto/SESSION_SIGNING_KEY',
+    SECRET_CANARY: 'secret://eiaaw-all-projects/prod/crypto/SECRET_CANARY',
 
-    ANTHROPIC_API_KEY: 'secret://eiaaw-fdw/prod/llm/ANTHROPIC_API_KEY',
+    ANTHROPIC_API_KEY: 'secret://eiaaw-all-projects/prod/llm/ANTHROPIC_API_KEY',
     LLM_GLOBAL_COST_CEILING_MINOR: '500000',
     LLM_GLOBAL_COST_CURRENCY: 'MYR',
 
     OBJECT_STORE_DRIVER: 's3',
     OBJECT_STORE_BUCKET: 'eiaaw-fdw-artifacts',
-    OBJECT_STORE_ENDPOINT: 'secret://eiaaw-fdw/prod/storage/R2_ENDPOINT',
-    OBJECT_STORE_ACCESS_KEY_ID: 'secret://eiaaw-fdw/prod/storage/R2_ACCESS_KEY_ID',
-    OBJECT_STORE_SECRET_ACCESS_KEY: 'secret://eiaaw-fdw/prod/storage/R2_SECRET_ACCESS_KEY',
+    OBJECT_STORE_ENDPOINT: 'secret://eiaaw-all-projects/prod/storage/R2_ENDPOINT',
+    OBJECT_STORE_ACCESS_KEY_ID: 'secret://eiaaw-all-projects/prod/storage/R2_ACCESS_KEY_ID',
+    OBJECT_STORE_SECRET_ACCESS_KEY: 'secret://eiaaw-all-projects/prod/storage/R2_SECRET_ACCESS_KEY',
 
     WORM_DRIVER: 'postgres',
     WORM_SECONDARY_DRIVER: 'none',
