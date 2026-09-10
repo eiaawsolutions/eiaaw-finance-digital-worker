@@ -33,30 +33,38 @@ The cost is blast-radius separation. The audit-chain anchor key and the KMS
 master key sit in the same workspace as every other EIAAW app's secrets, read
 by an identity already spread across six services. Compromise of that identity
 reaches this worker's integrity keys. If a client contract ever requires
-segregated key custody, create a dedicated workspace, move these nine secrets
+segregated key custody, create a dedicated workspace, move these eleven secrets
 into it, issue a dedicated machine identity, and repoint
 `INFISICAL_PROJECT_ID` — the handles keep working unchanged.
 
 Do **not** use the `mcp-reader` identity here. It holds `secrets:list` only, by
 design, and the app needs to read values.
 
-### The nine secrets this deployment reads
+### The eleven secrets this deployment reads
 
 The resolver dereferences a handle by its **environment, path and name** against
 `INFISICAL_PROJECT_ID` — the project segment in the handle is documentation.
-All nine must exist at the root of `eiaaw-all-projects`, environment `prod`, or
-the service boots and then fails closed on the first resolution:
+All eleven must exist at the root of `eiaaw-all-projects`, environment `prod`, or
+the service boots and then fails closed on the first resolution.
 
-| Secret                                                                                                  | Status                                    |
+The list below is the one in [`.railway/railway.ts`](../.railway/railway.ts).
+When a handle is added there, add it here — an undocumented eleventh secret is
+how the previous version of this table came to say "nine" and omit
+`VOYAGE_API_KEY` entirely.
+
+| Secret                                                                                                  | Purpose                                   |
 | ------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `ANTHROPIC_API_KEY`                                                                                     | Already present — nothing to do           |
-| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                                              | Present — scope-check first, see below    |
-| `R2_ENDPOINT`                                                                                           | Add: the R2 S3 endpoint, see below        |
-| `AUDIT_CHAIN_ANCHOR_KEY`, `KMS_MASTER_KEY`, `NONCE_SIGNING_KEY`, `SESSION_SIGNING_KEY`, `SECRET_CANARY` | Add: new random material, generated below |
-| `API_SERVICE_TOKEN`                                                                                     | Add: authenticates the console to the API |
+| `ANTHROPIC_API_KEY`                                                                                     | Model access                              |
+| `VOYAGE_API_KEY`                                                                                        | Retrieval embeddings (`voyage-finance-2`) |
+| `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                               | Object store — see "The R2 bucket"        |
+| `AUDIT_CHAIN_ANCHOR_KEY`, `KMS_MASTER_KEY`, `NONCE_SIGNING_KEY`, `SESSION_SIGNING_KEY`, `SECRET_CANARY` | Integrity and encryption key material     |
+| `API_SERVICE_TOKEN`                                                                                     | Authenticates the console to the API      |
 
-The five signing and encryption keys are new random material, not third-party
-credentials. Generate each with:
+**All eleven are present in `prod` as of 2026-09-11.** Nothing to provision
+before the first deploy.
+
+The five signing and encryption keys are random material generated for this
+service, not third-party credentials. To mint replacements when rotating:
 
 ```bash
 node scripts/generate-crypto-keys.mjs
