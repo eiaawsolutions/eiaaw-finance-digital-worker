@@ -30,6 +30,7 @@
     "*.mjs",
     ".railway/*.ts",
     "scripts/**/*.ts",
+    "scripts/**/*.mjs",
     "test/**/*.ts",
     "packages/**/*.ts",
     "apps/**/*.ts",

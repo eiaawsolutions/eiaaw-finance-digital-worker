@@ -165,7 +165,7 @@ export default tseslint.config(
       '**/*.spec.ts',
       '**/*.itest.ts',
       '**/test/**/*.ts',
-      '**/scripts/**/*.ts',
+      '**/scripts/**/*.{ts,mjs}',
       '**/*.config.ts',
       // A CLI's output IS its interface: migrate, seed, the assurance harness
       // and the secret scanner all report to a terminal, and routing that
@@ -188,6 +188,18 @@ export default tseslint.config(
     rules: {
       'no-console': 'off',
       '@typescript-eslint/no-misused-promises': 'off',
+    },
+  },
+
+  // ---- Plain-JS operator scripts run in Node -------------------------------
+  //
+  // `no-undef` is a core rule and is not type-aware, so it does not learn about
+  // Node's globals from the TypeScript program the way the .ts scripts do. It
+  // has to be told. These are operator-facing CLIs, so `console` is the point.
+  {
+    files: ['**/scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly' },
     },
   },
 
