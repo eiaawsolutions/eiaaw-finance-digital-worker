@@ -93,20 +93,21 @@ identifier is free reconnaissance for anyone enumerating targets. It lives in
 Infisical beside the key pair, which also keeps the resolver to one path instead
 of two.
 
-**Before the first deploy, check the R2 token's bucket scope.** In the dashboard:
-R2 → Manage R2 API Tokens → open the token behind `R2_ACCESS_KEY_ID`.
+**Token bucket scope — checked 2026-09-10, no action needed.** Both account API
+tokens are scoped to _All buckets_ (`EIAAW ORG`, Object Read & Write; `R2 Account
+Token`, Admin Read & Write), so whichever one backs `R2_ACCESS_KEY_ID` reaches
+the new bucket.
 
-- _Apply to all buckets_ → nothing to do.
-- _Apply to specific buckets_ and `eiaaw-fdw-artifacts` is not among them → the
-  token authenticates and then denies every write. Add the bucket to the token,
-  or mint one scoped to it.
+Re-check this whenever an R2 token is rotated or minted, because the account also
+carries `eiaaw-smt-prod` from another project. A token scoped to that bucket alone
+authenticates here and then denies every write, and it is indistinguishable from
+a working one until the first artefact is stored — nothing in boot, settings
+validation or the health checks touches it. In the dashboard: R2 → Manage R2 API
+Tokens → the **Applied to** column.
 
-This is worth checking by hand because the account's other bucket,
-`eiaaw-smt-prod`, belongs to a different project, and a token minted for that one
-is indistinguishable from a working one until the first artefact is stored. The
-S3 driver now refuses that case by name rather than surfacing a raw SDK trace —
-see `S3ObjectStoreDriver` in `packages/db/src/objects.ts` — but a legible refusal
-at runtime is still a failed deploy.
+`S3ObjectStoreDriver` in `packages/db/src/objects.ts` now refuses that case by
+name instead of surfacing a raw SDK trace, so the failure is legible rather than
+mysterious. It is still a failed deploy.
 
 ### Authentication, and what it currently evidences
 
