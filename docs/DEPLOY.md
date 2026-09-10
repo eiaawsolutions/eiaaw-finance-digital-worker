@@ -47,12 +47,13 @@ The resolver dereferences a handle by its **environment, path and name** against
 All nine must exist at the root of `eiaaw-all-projects`, environment `prod`, or
 the service boots and then fails closed on the first resolution:
 
-| Secret                                                                                                  | Status                                                  |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                         | Already present — nothing to do                         |
-| `R2_ENDPOINT`                                                                                           | Add: `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com` |
-| `AUDIT_CHAIN_ANCHOR_KEY`, `KMS_MASTER_KEY`, `NONCE_SIGNING_KEY`, `SESSION_SIGNING_KEY`, `SECRET_CANARY` | Add: new random material, generated below               |
-| `API_SERVICE_TOKEN`                                                                                     | Add: authenticates the console to the API               |
+| Secret                                                                                                  | Status                                    |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `ANTHROPIC_API_KEY`                                                                                     | Already present — nothing to do           |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                                              | Present — scope-check first, see below    |
+| `R2_ENDPOINT`                                                                                           | Add: the R2 S3 endpoint, see below        |
+| `AUDIT_CHAIN_ANCHOR_KEY`, `KMS_MASTER_KEY`, `NONCE_SIGNING_KEY`, `SESSION_SIGNING_KEY`, `SECRET_CANARY` | Add: new random material, generated below |
+| `API_SERVICE_TOKEN`                                                                                     | Add: authenticates the console to the API |
 
 The five signing and encryption keys are new random material, not third-party
 credentials. Generate each with:
@@ -62,6 +63,50 @@ node scripts/generate-crypto-keys.mjs
 ```
 
 It prints each value to your terminal, labelled, and writes nothing to disk.
+
+### The R2 bucket
+
+The bucket exists. It was created 2026-09-10 in the APAC location hint, matching
+the `residency_zone` this deployment stamps on every stored object:
+
+```text
+name:                   eiaaw-fdw-artifacts
+location:               APAC
+default_storage_class:  Standard
+```
+
+`OBJECT_STORE_BUCKET` in `.env.example` already names it, so nothing changes
+there. `R2_ENDPOINT` is that bucket's S3 API address — the Cloudflare account ID
+followed by a fixed suffix:
+
+```text
+https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com
+```
+
+**This is already set** in `eiaaw-all-projects`, environments `prod` and `dev`,
+at the root. Nothing to do. If you ever need to reconstruct it, `wrangler whoami`
+prints the account ID.
+
+The account ID is not a credential — it rides on every R2 request — but it is
+not written out here either, because this repository is public and an account
+identifier is free reconnaissance for anyone enumerating targets. It lives in
+Infisical beside the key pair, which also keeps the resolver to one path instead
+of two.
+
+**Before the first deploy, check the R2 token's bucket scope.** In the dashboard:
+R2 → Manage R2 API Tokens → open the token behind `R2_ACCESS_KEY_ID`.
+
+- _Apply to all buckets_ → nothing to do.
+- _Apply to specific buckets_ and `eiaaw-fdw-artifacts` is not among them → the
+  token authenticates and then denies every write. Add the bucket to the token,
+  or mint one scoped to it.
+
+This is worth checking by hand because the account's other bucket,
+`eiaaw-smt-prod`, belongs to a different project, and a token minted for that one
+is indistinguishable from a working one until the first artefact is stored. The
+S3 driver now refuses that case by name rather than surfacing a raw SDK trace —
+see `S3ObjectStoreDriver` in `packages/db/src/objects.ts` — but a legible refusal
+at runtime is still a failed deploy.
 
 ### Authentication, and what it currently evidences
 
