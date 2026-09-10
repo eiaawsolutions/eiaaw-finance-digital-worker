@@ -3,7 +3,8 @@
  *
  * Every non-bootstrap secret is referenced as a handle:
  *
- *     secret://<project>/<environment>/<path>/<NAME>
+ *     secret://<project>/<environment>/<NAME>            (workspace root)
+ *     secret://<project>/<environment>/<path>/<NAME>     (in a folder)
  *
  * and is dereferenced through Infisical at boot. The three Infisical bootstrap
  * credentials are the only raw values permitted in any deployment target's env.
@@ -21,7 +22,19 @@
  */
 import { WorkerError } from './errors.js';
 
-const HANDLE_PATTERN = /^secret:\/\/([^/\s]+)\/([^/\s]+)\/(.+)\/([A-Z0-9_]+)$/;
+/**
+ * `secret://<project>/<environment>[/<path>]/<NAME>`
+ *
+ * The path is optional, and omitting it means the workspace root. That is the
+ * EIAAW house convention: one shared workspace per environment with every
+ * secret flat at the root, rather than per-domain folders. The folder form
+ * still parses, so a project that wants segregated paths keeps working.
+ *
+ * The optional group is greedy, so an explicit path always wins over reading
+ * its last segment as part of the name — `…/crypto/KMS_MASTER_KEY` is path
+ * `/crypto` name `KMS_MASTER_KEY`, never path `/` name `KMS_MASTER_KEY`.
+ */
+const HANDLE_PATTERN = /^secret:\/\/([^/\s]+)\/([^/\s]+)\/(?:(.+)\/)?([A-Z0-9_]+)$/;
 
 export interface SecretHandle {
   readonly raw: string;
@@ -41,8 +54,10 @@ export function parseSecretHandle(value: string): SecretHandle {
     throw new WorkerError('contract_invalid', {
       detail:
         `"${value}" is not a valid secret handle. The form is ` +
-        'secret://<project>/<environment>/<path>/<NAME>. Raw secret values are ' +
-        'not permitted outside the three Infisical bootstrap credentials.',
+        'secret://<project>/<environment>/<NAME> for a secret at the workspace ' +
+        'root, or secret://<project>/<environment>/<path>/<NAME> for one in a ' +
+        'folder. Raw secret values are not permitted outside the three ' +
+        'Infisical bootstrap credentials.',
       failureClass: 'configuration',
       retryable: false,
     });

@@ -38,6 +38,46 @@ describe('secret handles', () => {
   it('explains the required form when given a raw value', () => {
     expect(() => parseSecretHandle('sk-ant-abc')).toThrow(/not a valid secret handle/);
   });
+
+  /**
+   * The EIAAW house convention keeps every secret flat at the root of a shared
+   * workspace rather than in per-domain folders, so the path segment is
+   * optional and its absence means the root.
+   */
+  it('accepts the flat house form with no path segment', () => {
+    expect(isSecretHandle('secret://eiaaw-all-projects/prod/ANTHROPIC_API_KEY')).toBe(true);
+  });
+
+  it('reads a pathless handle as the workspace root', () => {
+    const handle = parseSecretHandle('secret://eiaaw-all-projects/prod/ANTHROPIC_API_KEY');
+    expect(handle).toMatchObject({
+      project: 'eiaaw-all-projects',
+      environment: 'prod',
+      path: '/',
+      name: 'ANTHROPIC_API_KEY',
+    });
+  });
+
+  /**
+   * A nested path must still win over reading the last-but-one segment as part
+   * of the name — otherwise adopting the flat form would silently re-point
+   * every existing foldered handle at the root.
+   */
+  it('still prefers an explicit path when one is present', () => {
+    expect(parseSecretHandle('secret://p/prod/crypto/KMS_MASTER_KEY')).toMatchObject({
+      path: '/crypto',
+      name: 'KMS_MASTER_KEY',
+    });
+    expect(parseSecretHandle('secret://p/prod/a/b/c/SOME_KEY')).toMatchObject({
+      path: '/a/b/c',
+      name: 'SOME_KEY',
+    });
+  });
+
+  it('still rejects a handle with no name at all', () => {
+    expect(isSecretHandle('secret://eiaaw-all-projects/prod/')).toBe(false);
+    expect(isSecretHandle('secret://eiaaw-all-projects/prod')).toBe(false);
+  });
 });
 
 describe('SecretRef', () => {

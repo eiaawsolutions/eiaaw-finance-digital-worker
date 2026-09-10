@@ -18,24 +18,24 @@ short and non-negotiable:
 If a step below ever seems to be asking you to paste an `sk-ant-…` into Railway,
 stop: that is not this runbook.
 
-**Which Infisical workspace this deployment uses.**
+**Where this deployment's secrets live.**
 
-As of 2026-09-09 this worker resolves against the **shared `eiaaw-all-projects`
-workspace**, using the shared EIAAW machine identity that already serves
-opspilot, eiaaw-smt and the proposal generator. That is a deliberate operator
-decision and a deviation from the contract's `<project>-prod` convention:
+This worker follows the EIAAW house convention: the shared
+**`eiaaw-all-projects`** Infisical workspace, environment **`prod`**, every
+secret **flat at the workspace root** — no per-domain folders. It reads them
+with the shared EIAAW machine identity that already serves opspilot, eiaaw-smt
+and the proposal generator.
 
-- **Why**: the identity already exists and authenticates, and
-  `ANTHROPIC_API_KEY` plus the R2 credentials already live in that workspace.
-  It takes a provisioning step off the critical path.
-- **What it costs**: blast-radius separation. The audit-chain anchor key and the
-  KMS master key sit in the same workspace as every other EIAAW app's secrets,
-  read by an identity already spread across six services. Compromise of that
-  identity reaches this worker's integrity keys.
+That is the same layout every other EIAAW service uses, which is the point: an
+operator learns one arrangement and it holds across the estate.
 
-If a client contract ever requires segregated key custody, create
-`eiaaw-fdw-prod`, move the `/crypto` folder into it, issue a dedicated
-`eiaaw-fdw-app` identity, and repoint `INFISICAL_PROJECT_ID`. Nothing else moves.
+The cost is blast-radius separation. The audit-chain anchor key and the KMS
+master key sit in the same workspace as every other EIAAW app's secrets, read
+by an identity already spread across six services. Compromise of that identity
+reaches this worker's integrity keys. If a client contract ever requires
+segregated key custody, create a dedicated workspace, move these nine secrets
+into it, issue a dedicated machine identity, and repoint
+`INFISICAL_PROJECT_ID` — the handles keep working unchanged.
 
 Do **not** use the `mcp-reader` identity here. It holds `secrets:list` only, by
 design, and the app needs to read values.
@@ -44,17 +44,17 @@ design, and the app needs to read values.
 
 The resolver dereferences a handle by its **environment, path and name** against
 `INFISICAL_PROJECT_ID` — the project segment in the handle is documentation.
-All nine must exist in `eiaaw-all-projects`, environment `prod`, or the service
-boots and then fails closed on the first resolution:
+All nine must exist at the root of `eiaaw-all-projects`, environment `prod`, or
+the service boots and then fails closed on the first resolution:
 
-| Path       | Secret                                                                                                  | Notes                                                                      |
-| ---------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `/crypto`  | `AUDIT_CHAIN_ANCHOR_KEY`, `KMS_MASTER_KEY`, `NONCE_SIGNING_KEY`, `SESSION_SIGNING_KEY`, `SECRET_CANARY` | Generated for this worker; they exist nowhere else                         |
-| `/llm`     | `ANTHROPIC_API_KEY`                                                                                     | Copy of the value already at the workspace root                            |
-| `/storage` | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                               | Access key and secret exist at root; endpoint derives from `R2_ACCOUNT_ID` |
+| Secret                                                                                                  | Status                                                  |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                         | Already present — nothing to do                         |
+| `R2_ENDPOINT`                                                                                           | Add: `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com` |
+| `AUDIT_CHAIN_ANCHOR_KEY`, `KMS_MASTER_KEY`, `NONCE_SIGNING_KEY`, `SESSION_SIGNING_KEY`, `SECRET_CANARY` | Add: new random material, generated below               |
 
-The five `/crypto` keys are new random material, not third-party credentials.
-Generate each with:
+The five signing and encryption keys are new random material, not third-party
+credentials. Generate each with:
 
 ```bash
 openssl rand -base64 32
@@ -63,9 +63,16 @@ openssl rand -base64 32
 `SECRET_CANARY` is a sentinel: assurance case P0-7 asserts it never appears in a
 prompt or a log line. Give it a value you can grep for unambiguously.
 
-Create the three folders and all nine secrets **in the Infisical UI**. Secret
-creation is a human action by design — the MCP server has no `set` capability
-and no agent session writes secret values.
+> **Do not substitute a near-miss.** The workspace already holds `AUDIT_HMAC_KEY`
+> and `SESSION_SECRET`. They are **not** `AUDIT_CHAIN_ANCHOR_KEY` and
+> `SESSION_SIGNING_KEY` — they belong to other services and have other
+> lifetimes. Reusing one because the name looks close is the same class of
+> mistake as passing the KMS master key to the Anthropic client, which this
+> repo has already had to fix once. Create the five keys fresh.
+
+Create all of them **in the Infisical UI**. Secret creation is a human action by
+design — the MCP server has no `set` capability and no agent session writes
+secret values.
 
 ---
 
