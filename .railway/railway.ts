@@ -181,7 +181,13 @@ export default defineRailway(() => {
       healthcheckTimeout: 90,
     },
     replicas: { [REGION]: 2 },
-    env: { ...runtime, API_HOST: '0.0.0.0', API_PORT: '3000' },
+    // PORT is not read by the app — it reads API_PORT — but Railway routes the
+    // public domain and aims the health check at PORT. Without it the process
+    // listens on 3000, the probe knocks somewhere else, and the deployment is
+    // killed after the health check window with a log that shows a clean boot
+    // and not a single inbound request. Same value, declared twice, because two
+    // different readers need it.
+    env: { ...runtime, API_HOST: '0.0.0.0', API_PORT: '3000', PORT: '3000' },
   });
 
   /**
