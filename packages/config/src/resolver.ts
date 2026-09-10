@@ -19,6 +19,8 @@
  * s.1.3 D7: "C16 answers presence and value; it never answers 'what should
  * happen'." Nothing in this file interprets a value.
  */
+import { SETTINGS_CATALOGUE } from './catalogue.js';
+import { validateSettingValue } from './validate.js';
 import {
   WorkerError,
   type PrefixedHash,
@@ -308,6 +310,115 @@ export class ConfigService {
    * Everything a graph will read is captured here, so the graph's later reads
    * are answered from a frozen picture rather than a live table.
    */
+  /**
+   * Record a client's answer to one AS- field.
+   *
+   * Enrolment's write path. Everything about it is deliberate:
+   *
+   * - The value is validated against the catalogue's declared shape first. The
+   *   runtime reads these values without re-checking them, so a string where an
+   *   integer belongs would be read as though it were correct.
+   * - Rows are effective-dated and never updated in place for a *different*
+   *   effective date. Re-answering a field for the same date corrects an entry;
+   *   answering it for a new date is a change with a history, which is what
+   *   admin-settings s.7 requires of a threshold anyone may later be asked to
+   *   justify.
+   * - `is_tbc` records "not decided yet" and carries no value. The resolver
+   *   treats it as absent and enrolment health counts it separately, so a gap
+   *   stays visible instead of failing closed months later at the point of use.
+   * - It writes no snapshot. A value becomes usable when a human publishes one
+   *   (s.13.1), so that a half-finished enrolment cannot start being read
+   *   field-by-field as it is typed.
+   */
+  async setValue(input: {
+    readonly tenantId: string;
+    readonly fieldId: string;
+    readonly value?: unknown;
+    readonly isTbc?: boolean;
+    readonly effectiveFrom: string;
+    readonly setBy: string;
+    readonly scope?: SettingScope;
+    readonly sourceNote?: string;
+  }): Promise<Result<{ readonly field_id: string; readonly value_hash: string }>> {
+    const field = SETTINGS_CATALOGUE.find((f) => f.field_id === input.fieldId);
+    if (!field) {
+      return err(
+        new WorkerError('contract_invalid', {
+          detail:
+            `"${input.fieldId}" is not a field the runtime reads. The catalogue is the closed ` +
+            'list of settings this platform consumes; a field outside it would be stored and ' +
+            'never read, which is worse than refusing it.',
+          failureClass: 'configuration',
+          retryable: false,
+          context: { field_id: input.fieldId },
+        }),
+      );
+    }
+
+    const isTbc = input.isTbc === true;
+    if (!isTbc) {
+      const verdict = validateSettingValue(field, input.value);
+      if (!verdict.ok) {
+        return err(
+          new WorkerError('contract_invalid', {
+            detail: verdict.reason,
+            failureClass: 'configuration',
+            retryable: false,
+            context: { field_id: input.fieldId },
+          }),
+        );
+      }
+    } else if (input.value !== undefined && input.value !== null) {
+      return err(
+        new WorkerError('contract_invalid', {
+          detail:
+            `${input.fieldId} was marked TBC and given a value. TBC means the client has not ` +
+            'decided; a row that carries both would resolve as answered while reading as open.',
+          failureClass: 'configuration',
+          retryable: false,
+          context: { field_id: input.fieldId },
+        }),
+      );
+    }
+
+    const scope = input.scope ?? {};
+    // A TBC row still needs a hash for the column's shape; hashing the marker
+    // keeps every row addressable without inventing a value for it.
+    const valueHash = hashObject(isTbc ? { tbc: true } : { value: input.value });
+
+    await withTenant(
+      this.#db,
+      { tenantId: input.tenantId, residencyZone: this.#residencyZone },
+      async (s) => {
+        await s.sql`
+          INSERT INTO settings_values (
+            tenant_id, field_id, scope_entity, scope_process, scope_channel, scope_role,
+            value, is_tbc, value_hash, effective_from, set_by, source_note
+          ) VALUES (
+            ${input.tenantId}, ${input.fieldId},
+            ${scope.entity ?? '*'}, ${scope.process ?? '*'},
+            ${scope.channel ?? '*'}, ${scope.role ?? '*'},
+            ${isTbc ? null : JSON.stringify(input.value)}::jsonb,
+            ${isTbc}, ${valueHash}, ${input.effectiveFrom}::date,
+            ${input.setBy}, ${input.sourceNote ?? null}
+          )
+          ON CONFLICT (tenant_id, field_id, scope_entity, scope_process, scope_channel, scope_role, effective_from)
+          DO UPDATE SET
+            value       = EXCLUDED.value,
+            is_tbc      = EXCLUDED.is_tbc,
+            value_hash  = EXCLUDED.value_hash,
+            set_by      = EXCLUDED.set_by,
+            source_note = EXCLUDED.source_note
+        `;
+      },
+    );
+
+    // The cached snapshot no longer reflects what is stored.
+    this.invalidate(input.tenantId);
+
+    return ok({ field_id: input.fieldId, value_hash: valueHash });
+  }
+
   async publishSnapshot(
     tenantId: string,
     publishedBy: string,

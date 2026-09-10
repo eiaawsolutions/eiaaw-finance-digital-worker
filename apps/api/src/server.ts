@@ -577,6 +577,97 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return container.settings.health(caller.tenant_id);
   });
 
+  /**
+   * Enrolment's write path — DWD-06 s.13, admin-settings 00-INDEX s.7.
+   *
+   * Admin-only, and audited on every call: a threshold, an approver or an
+   * autonomy level is exactly the kind of value someone may later be asked to
+   * justify, so who set it and when is part of the record, not a side effect.
+   *
+   * Publishing a snapshot is deliberately a separate call. A value written here
+   * is not yet readable by the runtime, so a half-finished enrolment cannot be
+   * consumed field-by-field as it is typed.
+   */
+  app.put('/v1/config/settings/values', async (request, reply) => {
+    const caller = await requireAdmin(request);
+    const body = (request.body ?? {}) as {
+      field_id?: string;
+      value?: unknown;
+      is_tbc?: boolean;
+      effective_from?: string;
+      scope?: { entity?: string; process?: string; channel?: string; role?: string };
+      source_note?: string;
+    };
+
+    if (typeof body.field_id !== 'string' || body.field_id.length === 0) {
+      throw new WorkerError('contract_invalid', {
+        detail: 'field_id is required and names the AS- field being answered.',
+        retryable: false,
+        traceId: request.traceId,
+      });
+    }
+    if (typeof body.effective_from !== 'string') {
+      throw new WorkerError('contract_invalid', {
+        detail:
+          'effective_from is required. Settings are effective-dated so a change to a ' +
+          'threshold can be told apart from a correction of one.',
+        retryable: false,
+        traceId: request.traceId,
+      });
+    }
+
+    const result = await container.settings.setValue({
+      tenantId: caller.tenant_id,
+      fieldId: body.field_id,
+      // Distinguished from `undefined`, which for a TBC row means "no value".
+      ...(body.value === undefined ? {} : { value: body.value }),
+      ...(body.is_tbc === undefined ? {} : { isTbc: body.is_tbc }),
+      effectiveFrom: body.effective_from,
+      setBy: caller.principal_id,
+      ...(body.scope ? { scope: body.scope } : {}),
+      ...(body.source_note ? { sourceNote: body.source_note } : {}),
+    });
+
+    if (!result.ok) throw result.error;
+
+    await container.emitter('C16').emit(
+      { tenant_id: caller.tenant_id, trace_id: request.traceId },
+      {
+        event_type: 'config.changed',
+        outcome: 'success',
+        subject: { kind: 'setting', id: body.field_id },
+        actor: { kind: 'human', principal_id: caller.principal_id },
+      },
+    );
+
+    return reply.code(200).send(result.value);
+  });
+
+  /**
+   * s.13.1: a graph pins a snapshot version at plan time, so a mid-run change
+   * cannot alter a decision halfway. Publishing is the act that makes the
+   * values entered above readable by the runtime.
+   */
+  app.post('/v1/config/snapshots', async (request, reply) => {
+    const caller = await requireAdmin(request);
+    const snapshot = await container.settings.publishSnapshot(
+      caller.tenant_id,
+      caller.principal_id,
+    );
+
+    await container.emitter('C16').emit(
+      { tenant_id: caller.tenant_id, trace_id: request.traceId },
+      {
+        event_type: 'config.changed',
+        outcome: 'success',
+        subject: { kind: 'settings_snapshot', id: String(snapshot.snapshot_version) },
+        actor: { kind: 'human', principal_id: caller.principal_id },
+      },
+    );
+
+    return reply.code(201).send(snapshot);
+  });
+
   app.post('/v1/config/invalidate', async (request) => {
     const caller = await requireAdmin(request);
     container.settings.invalidate(caller.tenant_id);
@@ -675,6 +766,32 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       });
     }
     return card;
+  });
+
+  /**
+   * Publishing a Scope Card is a human act, and the service enforces that:
+   * AS-SCP-014 refuses a card attributed to the worker itself, and a card
+   * cannot take effect before its approval record exists.
+   */
+  app.post('/v1/scope-card', async (request, reply) => {
+    const caller = await requireAdmin(request);
+    const result = await container.scopeCards.publish(
+      caller.tenant_id,
+      request.body as Parameters<typeof container.scopeCards.publish>[1],
+    );
+    if (!result.ok) throw result.error;
+
+    await container.emitter('C13').emit(
+      { tenant_id: caller.tenant_id, trace_id: request.traceId },
+      {
+        event_type: 'scope_card.published',
+        outcome: 'success',
+        subject: { kind: 'scope_card', id: result.value.card_id ?? caller.tenant_id },
+        actor: { kind: 'human', principal_id: caller.principal_id },
+      },
+    );
+
+    return reply.code(201).send(result.value);
   });
 
   return app;

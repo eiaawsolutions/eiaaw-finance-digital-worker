@@ -8,3 +8,4 @@
 export * from './resolver.js';
 export * from './catalogue.js';
 export * from './seed.js';
+export * from './validate.js';
