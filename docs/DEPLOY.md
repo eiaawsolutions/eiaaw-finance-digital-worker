@@ -52,13 +52,31 @@ the service boots and then fails closed on the first resolution:
 | `ANTHROPIC_API_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                         | Already present — nothing to do                         |
 | `R2_ENDPOINT`                                                                                           | Add: `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com` |
 | `AUDIT_CHAIN_ANCHOR_KEY`, `KMS_MASTER_KEY`, `NONCE_SIGNING_KEY`, `SESSION_SIGNING_KEY`, `SECRET_CANARY` | Add: new random material, generated below               |
+| `API_SERVICE_TOKEN`                                                                                     | Add: authenticates the console to the API               |
 
 The five signing and encryption keys are new random material, not third-party
 credentials. Generate each with:
 
 ```bash
-openssl rand -base64 32
+node scripts/generate-crypto-keys.mjs
 ```
+
+It prints each value to your terminal, labelled, and writes nothing to disk.
+
+### Authentication, and what it currently evidences
+
+`API_SERVICE_TOKEN` is what lets the console reach the API at all. In prod the
+header-only session is refused, and the API **refuses to start** without the
+token rather than serving endpoints nothing can call.
+
+Understand what it proves. The token says a request came from the console. It
+does not say which human is acting — the console names a principal and the API
+takes its word for it. Until OIDC lands, the console's own session is
+environment-configured rather than established by someone signing in, so an
+approval recorded through this path names a principal without proving one was
+present. Fine for enrolment and testing on a private network; not sufficient to
+evidence a dual-control decision to a regulator. Anyone holding the token can
+name any principal, so treat it as the console's own credentials.
 
 `SECRET_CANARY` is a sentinel: assurance case P0-7 asserts it never appears in a
 prompt or a log line. Give it a value you can grep for unambiguously.
@@ -255,9 +273,14 @@ Expect:
 
 Then verify the two undeferrable components are live:
 
+In prod the header-only session is refused — that path is dev-only by design.
+Every endpoint needing a caller wants the service token as well, and the API
+will not start without it:
+
 ```bash
-# The audit chain verifies.
-curl -H "x-admin: true" https://<api-domain>/v1/audit/verify
+# The audit chain verifies. TOKEN is the value behind
+# secret://eiaaw-all-projects/prod/API_SERVICE_TOKEN.
+curl -H "authorization: Bearer $TOKEN"      -H "x-tenant-id: tnt_yourclient"      -H "x-principal-id: usr_you"      -H "x-admin: true"      https://<api-domain>/v1/audit/verify
 
 # The evaluation gate blocks a broken change.
 pnpm --filter @eiaaw/assurance run harness --prove-gate
@@ -275,7 +298,7 @@ everything else is only as trustworthy as they are.
 design.** DWD-06 s.13.3: absence is a refusal, never a default.
 
 ```bash
-curl -H "x-tenant-id: tnt_yourclient" https://<api-domain>/v1/config/settings/health
+curl -H "authorization: Bearer $TOKEN"      -H "x-tenant-id: tnt_yourclient"      -H "x-principal-id: usr_you"      https://<api-domain>/v1/config/settings/health
 ```
 
 Until `ready_for_execution` is `true`:

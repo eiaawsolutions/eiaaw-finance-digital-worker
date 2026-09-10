@@ -1,5 +1,5 @@
 /**
- * Generate the five crypto secrets the finance digital worker needs.
+ * Generate the crypto secrets and service credentials the worker needs.
  *
  * Run this yourself and copy the values straight into the Infisical UI. The
  * values are printed to YOUR terminal and go nowhere else — do not paste them
@@ -16,12 +16,13 @@
  */
 import { randomBytes } from 'node:crypto';
 
-/** The four keys that are pure random material. */
+/** Keys and tokens that are pure random material. */
 const KEYS = [
   ['AUDIT_CHAIN_ANCHOR_KEY', 'signs hourly anchors of the immutable audit hash chain'],
   ['KMS_MASTER_KEY', 'derives every tenant-scoped field encryption key'],
   ['NONCE_SIGNING_KEY', 'binds an approval nonce to a hand-off and a bundle version'],
   ['SESSION_SIGNING_KEY', 'signs console sessions'],
+  ['API_SERVICE_TOKEN', 'authenticates the console to the API; prod will not boot without it'],
 ];
 
 const line = (n = 74) => '-'.repeat(n);
@@ -50,7 +51,7 @@ console.log(`EIAAW-CANARY-${randomBytes(8).toString('hex').toUpperCase()}-DO-NOT
 console.log('');
 
 console.log(line());
-console.log('  Five values above. Paste each into Infisical, then close this terminal.');
+console.log('  Paste each value into Infisical, then close this terminal.');
 console.log('  They are not written to disk and are not recoverable after that.');
 console.log(line());
 console.log('');

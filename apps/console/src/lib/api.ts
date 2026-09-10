@@ -5,7 +5,51 @@
  * action, so the session credential never reaches the browser. The console has
  * no client-side fetch to the API at all.
  */
+import { SecretResolver, createSecretProvider } from '@eiaaw/core';
+
 const API_URL = process.env['PUBLIC_API_URL'] ?? 'http://localhost:3000';
+
+/**
+ * Authenticates this console to the API.
+ *
+ * `API_SERVICE_TOKEN` arrives as a `secret://` handle like every other secret,
+ * so it is dereferenced here rather than sent as-is — the deploy contract puts
+ * handles in configuration and values only in memory. Resolved once and held:
+ * the resolver caches, but so does this, so a page render never waits on
+ * Infisical twice.
+ *
+ * Server-side only, like everything in this file. It proves the request came
+ * from the console, not which human is acting — the principal headers say that
+ * and the API takes the console's word for it. See apps/api/src/authenticate.ts
+ * for what that does and does not evidence.
+ */
+let resolvedToken: Promise<string> | null = null;
+
+function serviceToken(): Promise<string> {
+  const raw = process.env['API_SERVICE_TOKEN'];
+  if (!raw) return Promise.resolve('');
+  resolvedToken ??= new SecretResolver(createSecretProvider())
+    .resolve(raw, 'API_SERVICE_TOKEN')
+    .then((ref) => ref.expose())
+    .catch(() => {
+      // Let the next render try again rather than caching a failure for the
+      // lifetime of the process.
+      resolvedToken = null;
+      return '';
+    });
+  return resolvedToken;
+}
+
+/** The headers every call carries: who we are, and who we act for. */
+async function authHeaders(session: Session): Promise<Record<string, string>> {
+  const token = await serviceToken();
+  return {
+    ...(token ? { authorization: `Bearer ${token}` } : {}),
+    'x-tenant-id': session.tenant_id,
+    'x-principal-id': session.principal_id,
+    ...(session.admin ? { 'x-admin': 'true' } : {}),
+  };
+}
 
 export interface Session {
   readonly tenant_id: string;
@@ -14,11 +58,14 @@ export interface Session {
 }
 
 /**
- * The development session.
+ * The current session.
  *
- * In production this is established by OIDC and read from a signed cookie. The
- * header form below only works because the API refuses it when
- * DEPLOY_ENVIRONMENT is prod.
+ * Still environment-configured rather than established by a person signing in.
+ * In prod the service token makes these headers acceptable to the API, so —
+ * unlike before — they now take effect there. That is the point of the token
+ * and also its limit: the console asserts this principal, nobody proved it.
+ *
+ * OIDC replaces this function, not the transport around it.
  */
 export function currentSession(): Session {
   return {
@@ -58,11 +105,7 @@ export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
 
   try {
     const response = await fetch(`${API_URL}${path}`, {
-      headers: {
-        'x-tenant-id': session.tenant_id,
-        'x-principal-id': session.principal_id,
-        ...(session.admin ? { 'x-admin': 'true' } : {}),
-      },
+      headers: await authHeaders(session),
       cache: 'no-store',
     });
 
@@ -106,12 +149,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<ApiResult
   try {
     const response = await fetch(`${API_URL}${path}`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-tenant-id': session.tenant_id,
-        'x-principal-id': session.principal_id,
-        ...(session.admin ? { 'x-admin': 'true' } : {}),
-      },
+      headers: { 'content-type': 'application/json', ...(await authHeaders(session)) },
       body: JSON.stringify(body),
       cache: 'no-store',
     });

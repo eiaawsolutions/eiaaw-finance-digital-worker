@@ -680,8 +680,11 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   return app;
 }
 
-export async function startServer(container: Container): Promise<FastifyInstance> {
-  const app = await buildServer({ container });
+export async function startServer(
+  container: Container,
+  authenticate?: ServerOptions['authenticate'],
+): Promise<FastifyInstance> {
+  const app = await buildServer({ container, ...(authenticate ? { authenticate } : {}) });
   await app.listen({ host: container.config.api.host, port: container.config.api.port });
   container.log.info('api listening', {
     host: container.config.api.host,

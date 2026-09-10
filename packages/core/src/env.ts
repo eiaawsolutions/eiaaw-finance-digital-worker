@@ -21,7 +21,16 @@ export interface AppConfig {
   readonly platformVersion: string;
   readonly residencyZone: string;
 
-  readonly api: { readonly host: string; readonly port: number; readonly publicUrl: string };
+  readonly api: {
+    readonly host: string;
+    readonly port: number;
+    readonly publicUrl: string;
+    /**
+     * Authenticates the console to the API. Null when unset, which `prod`
+     * refuses at boot rather than serving an API nothing can call.
+     */
+    readonly serviceToken: SecretRef | null;
+  };
   readonly consoleUrl: string;
 
   readonly database: {
@@ -204,6 +213,7 @@ export async function loadConfig(env: NodeJS.ProcessEnv = process.env): Promise<
       host: optional(env, 'API_HOST', '0.0.0.0'),
       port: integer(env, 'API_PORT', 3000),
       publicUrl: optional(env, 'PUBLIC_API_URL', 'http://localhost:3000'),
+      serviceToken: await resolveOptional('API_SERVICE_TOKEN'),
     },
     consoleUrl: optional(env, 'PUBLIC_CONSOLE_URL', 'http://localhost:3001'),
 

@@ -98,6 +98,10 @@ export default defineRailway(() => {
     SESSION_SIGNING_KEY: 'secret://eiaaw-all-projects/prod/SESSION_SIGNING_KEY',
     SECRET_CANARY: 'secret://eiaaw-all-projects/prod/SECRET_CANARY',
 
+    // Authenticates the console to the API. In prod the API refuses to start
+    // without it rather than serving endpoints nothing can call.
+    API_SERVICE_TOKEN: 'secret://eiaaw-all-projects/prod/API_SERVICE_TOKEN',
+
     ANTHROPIC_API_KEY: 'secret://eiaaw-all-projects/prod/ANTHROPIC_API_KEY',
     LLM_GLOBAL_COST_CEILING_MINOR: '500000',
     LLM_GLOBAL_COST_CURRENCY: 'MYR',
@@ -242,6 +246,15 @@ export default defineRailway(() => {
       // template literal cannot be used here: `api.env.X` is a reference
       // object, not a string, so interpolating it yields "[object Object]".
       PUBLIC_API_URL: 'http://${{api.RAILWAY_PRIVATE_DOMAIN}}:3000',
+      // The console's own copy. Same handle, same value, resolved by the
+      // console's process — it is the credential it presents to the API.
+      API_SERVICE_TOKEN: 'secret://eiaaw-all-projects/prod/API_SERVICE_TOKEN',
+      INFISICAL_RESOLVER_ENABLED: 'true',
+      INFISICAL_ENVIRONMENT: 'prod',
+      INFISICAL_SITE_URL: 'https://app.infisical.com',
+      INFISICAL_APP_CLIENT_ID: preserve(),
+      INFISICAL_APP_CLIENT_SECRET: preserve(),
+      INFISICAL_PROJECT_ID: preserve(),
     },
   });
 

@@ -6,12 +6,39 @@
  * operation that fails after its audit event but before its effect is the one
  * shape the failure model cannot describe.
  */
+import { WorkerError } from '@eiaaw/core';
+import { serviceTokenAuthenticator } from './authenticate.js';
 import { buildContainer } from './container.js';
 import { startServer } from './server.js';
 
 async function main(): Promise<void> {
   const container = await buildContainer();
-  const app = await startServer(container);
+
+  // Outside prod the default header authenticator stands, which is what the
+  // integration tests and local development use.
+  //
+  // In prod that default returns null for every request by design, so without a
+  // real authenticator the API boots healthy and answers 401 to everything that
+  // needs a caller. That is precisely how this deployment spent its first day:
+  // green health check, unreachable console. Refusing to start is the louder
+  // failure and the correct one.
+  let authenticate;
+  if (container.config.deployEnvironment === 'prod') {
+    const token = container.config.api.serviceToken;
+    if (!token) {
+      throw new WorkerError('contract_invalid', {
+        detail:
+          'API_SERVICE_TOKEN is not set. In prod the header authenticator is refused, so ' +
+          'without it every endpoint requiring a caller answers 401 and the console cannot ' +
+          'reach the API at all. Set the handle rather than running an API nothing can call.',
+        failureClass: 'configuration',
+        retryable: false,
+      });
+    }
+    authenticate = serviceTokenAuthenticator(token);
+  }
+
+  const app = await startServer(container, authenticate);
 
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
