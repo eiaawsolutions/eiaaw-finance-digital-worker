@@ -104,6 +104,27 @@ export interface S3DriverConfig {
   readonly secretAccessKey: string;
 }
 
+/** The parts of an AWS SDK error this driver classifies on. */
+interface S3Failure {
+  readonly name?: string;
+  readonly $metadata?: { readonly httpStatusCode?: number };
+}
+
+/**
+ * Every way a credential can be refused rather than merely fail.
+ *
+ * These are grouped with `AccessDenied` deliberately: an R2 token that is valid
+ * but scoped to a different bucket, a rotated key, and a malformed signature all
+ * present as an authentication-shaped error against a bucket that does exist,
+ * and all three are fixed by looking at the token rather than by retrying.
+ */
+const CREDENTIAL_REFUSED = new Set([
+  'AccessDenied',
+  'InvalidAccessKeyId',
+  'SignatureDoesNotMatch',
+  'CredentialsProviderError',
+]);
+
 /** The SDK surface, resolved once and held. */
 interface S3Sdk {
   readonly client: S3ClientShape;
@@ -158,23 +179,82 @@ export class S3ObjectStoreDriver implements ObjectStoreDriver {
     return this.#sdk;
   }
 
+  /**
+   * Classify a write failure.
+   *
+   * `get` may assume the bucket is reachable, because a row in `stored_objects`
+   * is proof that something already wrote there. A write has no such witness:
+   * the first artefact a deployment stores is also the first evidence that the
+   * bucket name and the credential agree with each other. The two configuration
+   * failures — a bucket that was never created, and a token scoped to a
+   * different bucket — are therefore named apart here. Both stay silent through
+   * boot, settings validation and every health check, and both surface as an
+   * indistinguishable SDK stack trace at the worst possible moment.
+   */
+  #writeFailure(key: string, cause: unknown): WorkerError {
+    const failure: S3Failure = typeof cause === 'object' && cause !== null ? cause : {};
+    const status = failure.$metadata?.httpStatusCode;
+    const context = { object_key: key, bucket: this.config.bucket };
+
+    if (failure.name === 'NoSuchBucket' || status === 404) {
+      return new WorkerError('dependency_unavailable', {
+        detail:
+          `Bucket "${this.config.bucket}" does not exist at ${this.config.endpoint}. ` +
+          'OBJECT_STORE_BUCKET names a bucket that was never created — refusing rather ' +
+          'than writing an evidence artefact somewhere it was not accounted for.',
+        failureClass: 'configuration',
+        retryable: false,
+        cause,
+        context,
+      });
+    }
+
+    if (CREDENTIAL_REFUSED.has(failure.name ?? '') || status === 401 || status === 403) {
+      return new WorkerError('dependency_unavailable', {
+        detail:
+          `The configured credentials were refused for bucket "${this.config.bucket}" ` +
+          `(${failure.name ?? `HTTP ${String(status)}`}). A token scoped to a different ` +
+          'bucket authenticates successfully and then denies every write, so check the ' +
+          'bucket scope on the token before assuming the key itself is wrong or expired.',
+        failureClass: 'configuration',
+        retryable: false,
+        cause,
+        context,
+      });
+    }
+
+    return new WorkerError('dependency_unavailable', {
+      detail:
+        `Writing "${key}" to bucket "${this.config.bucket}" failed ` +
+        `(${failure.name ?? 'unknown'}${status === undefined ? '' : `, HTTP ${String(status)}`}).`,
+      failureClass: 'tool',
+      retryable: true,
+      cause,
+      context,
+    });
+  }
+
   async put(key: string, body: Buffer, mediaType: string): Promise<void> {
     const sdk = await this.#ensure();
-    await sdk.client.send(
-      new sdk.PutObjectCommand({
-        Bucket: this.config.bucket,
-        Key: key,
-        Body: body,
-        ContentType: mediaType,
-        // No transport-level ChecksumAlgorithm. `ObjectStore.get` already
-        // verifies the body against the SHA-256 recorded in `stored_objects`,
-        // which is the stronger check because it also covers at-rest corruption
-        // and is enforced on every read. Adding an S3 checksum header would put
-        // an untested R2 compatibility question on the write path — and a write
-        // path that fails only when a real artefact is first stored is a worse
-        // failure than one that fails at boot.
-      }),
-    );
+    try {
+      await sdk.client.send(
+        new sdk.PutObjectCommand({
+          Bucket: this.config.bucket,
+          Key: key,
+          Body: body,
+          ContentType: mediaType,
+          // No transport-level ChecksumAlgorithm. `ObjectStore.get` already
+          // verifies the body against the SHA-256 recorded in `stored_objects`,
+          // which is the stronger check because it also covers at-rest corruption
+          // and is enforced on every read. Adding an S3 checksum header would put
+          // an untested R2 compatibility question on the write path — and a write
+          // path that fails only when a real artefact is first stored is a worse
+          // failure than one that fails at boot.
+        }),
+      );
+    } catch (cause) {
+      throw this.#writeFailure(key, cause);
+    }
   }
 
   async get(key: string): Promise<Buffer> {

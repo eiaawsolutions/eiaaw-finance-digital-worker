@@ -36,6 +36,24 @@ function fakeClient(objects: Map<string, Buffer> = new Map()): S3ClientShape & {
   };
 }
 
+/** A client that refuses every command, for exercising the write failure paths. */
+function failingClient(error: unknown): S3ClientShape {
+  return {
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async send() {
+      throw error;
+    },
+  };
+}
+
+/** An AWS SDK error carries its discriminator on `name` and `$metadata`. */
+function s3Error(name: string, httpStatusCode?: number): Error {
+  return Object.assign(new Error(name), {
+    name,
+    $metadata: httpStatusCode === undefined ? {} : { httpStatusCode },
+  });
+}
+
 const CONFIG = {
   bucket: 'eiaaw-fdw-artifacts',
   endpoint: 'https://acct.r2.cloudflarestorage.com',
@@ -94,5 +112,62 @@ describe('S3ObjectStoreDriver', () => {
     const driver = new S3ObjectStoreDriver(CONFIG, fakeClient());
 
     await expect(driver.get('vanished')).rejects.toThrow(/vanished/);
+  });
+});
+
+/**
+ * `get` may assume the bucket is reachable — a row in `stored_objects` is proof
+ * something already wrote there. A write has no such witness, so the first
+ * artefact a deployment stores is also the first test of whether the bucket name
+ * and the credential agree. Both ways that can fail are silent until that moment
+ * and identical in a raw SDK stack trace, so the driver names them apart.
+ */
+describe('S3ObjectStoreDriver write failures', () => {
+  const put = (client: S3ClientShape): Promise<void> =>
+    new S3ObjectStoreDriver(CONFIG, client).put('t/raw_inbound/ab', Buffer.from('x'), 'text/plain');
+
+  it('refuses, without retrying, when the configured bucket does not exist', async () => {
+    await expect(put(failingClient(s3Error('NoSuchBucket', 404)))).rejects.toMatchObject({
+      code: 'dependency_unavailable',
+      failureClass: 'configuration',
+      retryable: false,
+    });
+  });
+
+  it('names the bucket and the setting that points at it', async () => {
+    await expect(put(failingClient(s3Error('NoSuchBucket', 404)))).rejects.toThrow(
+      /eiaaw-fdw-artifacts[\s\S]*OBJECT_STORE_BUCKET/,
+    );
+  });
+
+  it('points a refused credential at the token bucket scope, not the key', async () => {
+    await expect(put(failingClient(s3Error('AccessDenied', 403)))).rejects.toThrow(/bucket scope/);
+  });
+
+  it('treats a refused credential as configuration, never as a retry', async () => {
+    await expect(put(failingClient(s3Error('InvalidAccessKeyId', 403)))).rejects.toMatchObject({
+      failureClass: 'configuration',
+      retryable: false,
+    });
+  });
+
+  it('marks a transient upstream failure retryable', async () => {
+    await expect(put(failingClient(s3Error('InternalError', 500)))).rejects.toMatchObject({
+      code: 'dependency_unavailable',
+      failureClass: 'tool',
+      retryable: true,
+    });
+  });
+
+  it('treats a network failure with no HTTP status as retryable', async () => {
+    await expect(put(failingClient(new Error('socket hang up')))).rejects.toMatchObject({
+      retryable: true,
+    });
+  });
+
+  it('carries the key and bucket as structured context', async () => {
+    await expect(put(failingClient(s3Error('NoSuchBucket', 404)))).rejects.toMatchObject({
+      context: { object_key: 't/raw_inbound/ab', bucket: 'eiaaw-fdw-artifacts' },
+    });
   });
 });
