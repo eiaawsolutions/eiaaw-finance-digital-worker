@@ -90,6 +90,139 @@ export class LocalObjectStoreDriver implements ObjectStoreDriver {
   }
 }
 
+/** Only the part of the AWS SDK client this driver uses. */
+export interface S3ClientShape {
+  send(command: never): Promise<{
+    Body?: { transformToByteArray(): Promise<Uint8Array> };
+  }>;
+}
+
+export interface S3DriverConfig {
+  readonly bucket: string;
+  readonly endpoint: string;
+  readonly accessKeyId: string;
+  readonly secretAccessKey: string;
+}
+
+/** The SDK surface, resolved once and held. */
+interface S3Sdk {
+  readonly client: S3ClientShape;
+  readonly PutObjectCommand: new (input: Record<string, unknown>) => never;
+  readonly GetObjectCommand: new (input: Record<string, unknown>) => never;
+  readonly HeadObjectCommand: new (input: Record<string, unknown>) => never;
+}
+
+/**
+ * S3-compatible driver, targeting Cloudflare R2.
+ *
+ * R2 is S3-API-compatible but not S3: it ignores the region, so the SDK's
+ * mandatory `region` is pinned to `auto` rather than guessed from the endpoint.
+ *
+ * The SDK is imported lazily so a local-driver boot never loads it, matching
+ * how the Infisical provider treats its client.
+ */
+export class S3ObjectStoreDriver implements ObjectStoreDriver {
+  #sdk: S3Sdk | undefined;
+  #injected: S3ClientShape | undefined;
+
+  constructor(
+    private readonly config: S3DriverConfig,
+    client?: S3ClientShape,
+  ) {
+    this.#injected = client;
+  }
+
+  async #ensure(): Promise<S3Sdk> {
+    if (this.#sdk) return this.#sdk;
+    const mod = (await import('@aws-sdk/client-s3')) as unknown as {
+      S3Client: new (opts: Record<string, unknown>) => S3ClientShape;
+      PutObjectCommand: S3Sdk['PutObjectCommand'];
+      GetObjectCommand: S3Sdk['GetObjectCommand'];
+      HeadObjectCommand: S3Sdk['HeadObjectCommand'];
+    };
+    this.#sdk = {
+      client:
+        this.#injected ??
+        new mod.S3Client({
+          region: 'auto',
+          endpoint: this.config.endpoint,
+          credentials: {
+            accessKeyId: this.config.accessKeyId,
+            secretAccessKey: this.config.secretAccessKey,
+          },
+        }),
+      PutObjectCommand: mod.PutObjectCommand,
+      GetObjectCommand: mod.GetObjectCommand,
+      HeadObjectCommand: mod.HeadObjectCommand,
+    };
+    return this.#sdk;
+  }
+
+  async put(key: string, body: Buffer, mediaType: string): Promise<void> {
+    const sdk = await this.#ensure();
+    await sdk.client.send(
+      new sdk.PutObjectCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+        Body: body,
+        ContentType: mediaType,
+        // No transport-level ChecksumAlgorithm. `ObjectStore.get` already
+        // verifies the body against the SHA-256 recorded in `stored_objects`,
+        // which is the stronger check because it also covers at-rest corruption
+        // and is enforced on every read. Adding an S3 checksum header would put
+        // an untested R2 compatibility question on the write path — and a write
+        // path that fails only when a real artefact is first stored is a worse
+        // failure than one that fails at boot.
+      }),
+    );
+  }
+
+  async get(key: string): Promise<Buffer> {
+    const sdk = await this.#ensure();
+    let response: { Body?: { transformToByteArray(): Promise<Uint8Array> } };
+    try {
+      response = await sdk.client.send(
+        new sdk.GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
+      );
+    } catch (cause) {
+      // The caller reached here from a `stored_objects` row, so the object is
+      // registered. Missing content is a chain-of-custody failure, not a miss.
+      throw new WorkerError('dependency_unavailable', {
+        detail:
+          `Object "${key}" is registered for this tenant but absent from bucket ` +
+          `"${this.config.bucket}". An evidence artefact that the database ` +
+          'accounts for and the store cannot produce is a chain-of-custody failure.',
+        failureClass: 'internal',
+        retryable: false,
+        cause,
+        context: { object_key: key },
+      });
+    }
+    if (!response.Body) {
+      throw new WorkerError('dependency_unavailable', {
+        detail: `Object "${key}" returned no body from bucket "${this.config.bucket}".`,
+        failureClass: 'internal',
+        retryable: true,
+        context: { object_key: key },
+      });
+    }
+    return Buffer.from(await response.Body.transformToByteArray());
+  }
+
+  async exists(key: string): Promise<boolean> {
+    const sdk = await this.#ensure();
+    try {
+      await sdk.client.send(new sdk.HeadObjectCommand({ Bucket: this.config.bucket, Key: key }));
+      return true;
+    } catch {
+      // HEAD distinguishes absence from failure poorly across S3 implementations;
+      // callers use this only to skip a redundant upload, so treating any
+      // negative answer as "not present" costs a re-put and never corrupts.
+      return false;
+    }
+  }
+}
+
 export interface ObjectStoreOptions {
   readonly db: Database;
   readonly driver: ObjectStoreDriver;
@@ -253,6 +386,10 @@ export function createObjectStore(options: {
   readonly residencyZone: string;
   readonly driver: 'local' | 's3';
   readonly localPath: string;
+  readonly bucket?: string;
+  readonly endpoint?: string | null;
+  readonly accessKeyId?: string | null;
+  readonly secretAccessKey?: string | null;
 }): ObjectStore {
   if (options.driver === 'local') {
     return new ObjectStore({
@@ -261,12 +398,37 @@ export function createObjectStore(options: {
       driver: new LocalObjectStoreDriver(options.localPath),
     });
   }
-  throw new WorkerError('contract_invalid', {
-    detail:
-      'The S3/R2 object store driver is not wired in this build. Set ' +
-      'OBJECT_STORE_DRIVER=local, or implement ObjectStoreDriver against R2 and ' +
-      'register it here. Absence is a refusal, not a silent fallback to local disk.',
-    failureClass: 'configuration',
-    retryable: false,
+
+  // Named individually rather than as "credentials are incomplete": the whole
+  // point of the settings contract is that a refusal says which field is
+  // missing, so the operator does not go hunting.
+  const missing = [
+    options.bucket ? null : 'OBJECT_STORE_BUCKET',
+    options.endpoint ? null : 'OBJECT_STORE_ENDPOINT',
+    options.accessKeyId ? null : 'OBJECT_STORE_ACCESS_KEY_ID',
+    options.secretAccessKey ? null : 'OBJECT_STORE_SECRET_ACCESS_KEY',
+  ].filter((name): name is string => name !== null);
+
+  if (missing.length > 0) {
+    throw new WorkerError('contract_invalid', {
+      detail:
+        `The S3/R2 object store is selected but ${missing.join(', ')} ` +
+        `${missing.length === 1 ? 'is' : 'are'} not set. Absence is a refusal, ` +
+        'not a silent fallback to local disk — an evidence artefact written to a ' +
+        "container's ephemeral disk is lost on the next deploy.",
+      failureClass: 'configuration',
+      retryable: false,
+    });
+  }
+
+  return new ObjectStore({
+    db: options.db,
+    residencyZone: options.residencyZone,
+    driver: new S3ObjectStoreDriver({
+      bucket: options.bucket as string,
+      endpoint: options.endpoint as string,
+      accessKeyId: options.accessKeyId as string,
+      secretAccessKey: options.secretAccessKey as string,
+    }),
   });
 }

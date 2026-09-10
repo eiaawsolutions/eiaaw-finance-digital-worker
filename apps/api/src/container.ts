@@ -100,6 +100,12 @@ export async function buildContainer(
     residencyZone: config.residencyZone,
     driver: config.objectStore.driver,
     localPath: config.objectStore.localPath,
+    bucket: config.objectStore.bucket,
+    // `expose()` at the point of use, not at assembly — the resolved values go
+    // straight into the S3 client and never sit in an intermediate string.
+    endpoint: config.objectStore.endpoint?.expose() ?? null,
+    accessKeyId: config.objectStore.accessKeyId?.expose() ?? null,
+    secretAccessKey: config.objectStore.secretAccessKey?.expose() ?? null,
   });
 
   // --- S2 audit — before anything that can act ---------------------------
