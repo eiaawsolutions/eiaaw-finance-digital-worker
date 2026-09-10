@@ -102,6 +102,19 @@ export default defineRailway(() => {
     LLM_GLOBAL_COST_CEILING_MINOR: '500000',
     LLM_GLOBAL_COST_CURRENCY: 'MYR',
 
+    // Retrieval embeddings. The model is named here, not defaulted in code:
+    // s.11.1 says the platform ships route shapes, not vendor choices.
+    //
+    // `voyage-finance-2` is domain-trained on financial text, which suits an
+    // MFRS corpus better than a general-purpose model, and it emits 1024 —
+    // matching the width migration 0010 set on knowledge_embeddings.embedding.
+    // Changing either the model or the width means re-embedding the corpus, so
+    // they move together or not at all.
+    EMBEDDING_PROVIDER: 'voyage',
+    EMBEDDING_MODEL: 'voyage-finance-2',
+    EMBEDDING_DIMENSIONS: '1024',
+    VOYAGE_API_KEY: 'secret://eiaaw-all-projects/prod/VOYAGE_API_KEY',
+
     OBJECT_STORE_DRIVER: 's3',
     OBJECT_STORE_BUCKET: 'eiaaw-fdw-artifacts',
     OBJECT_STORE_ENDPOINT: 'secret://eiaaw-all-projects/prod/R2_ENDPOINT',

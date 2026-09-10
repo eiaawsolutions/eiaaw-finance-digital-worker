@@ -10,7 +10,7 @@
  * are stubbed by something that acts." Constructing in build order means a
  * missing dependency fails at boot rather than at the first request.
  */
-import { type AppConfig, loadConfig, money } from '@eiaaw/core';
+import { type AppConfig, type SecretRef, WorkerError, loadConfig, money } from '@eiaaw/core';
 import {
   type Database,
   type ObjectStore,
@@ -24,7 +24,13 @@ import { ContextResolver } from '@eiaaw/context';
 import { KnowledgeService, createEmbeddingProvider } from '@eiaaw/knowledge';
 import { SkillRegistry } from '@eiaaw/registry';
 import { PolicyEngine } from '@eiaaw/policy';
-import { LlmGateway, StubProvider, AnthropicProvider, type ModelProvider } from '@eiaaw/llm';
+import {
+  LlmGateway,
+  StubProvider,
+  AnthropicProvider,
+  VoyageEmbeddingProvider,
+  type ModelProvider,
+} from '@eiaaw/llm';
 import { CalculationConnector, ToolInvoker, stubConnectors } from '@eiaaw/connectors';
 import { SkillRuntime } from '@eiaaw/skills';
 import { Planner } from '@eiaaw/planner';
@@ -63,6 +69,41 @@ export interface Container {
   readonly scopeCards: ScopeCardService;
   readonly delivery: DeliveryService;
   shutdown(): Promise<void>;
+}
+
+/**
+ * The hosted embedding provider, or undefined when this deployment names none.
+ *
+ * Undefined is not "fall back to something": `createEmbeddingProvider` returns
+ * the deterministic provider in dev and refuses outright in prod. Naming a
+ * provider without the settings it needs is the louder failure, so it is
+ * reported here rather than surfacing later as empty retrieval.
+ */
+function buildHostedEmbeddings(config: AppConfig): VoyageEmbeddingProvider | undefined {
+  if (config.embeddings.provider === 'none') return undefined;
+
+  const missing = [
+    config.embeddings.model ? null : 'EMBEDDING_MODEL',
+    config.embeddings.apiKey ? null : 'VOYAGE_API_KEY',
+  ].filter((name): name is string => name !== null);
+
+  if (missing.length > 0) {
+    throw new WorkerError('contract_invalid', {
+      detail:
+        `EMBEDDING_PROVIDER is "${config.embeddings.provider}" but ${missing.join(' and ')} ` +
+        `${missing.length === 1 ? 'is' : 'are'} not set. Retrieval without embeddings ` +
+        'returns nothing, which reads as "the knowledge base has no answer" rather than ' +
+        'as a misconfiguration — so this refuses at boot instead.',
+      failureClass: 'configuration',
+      retryable: false,
+    });
+  }
+
+  return new VoyageEmbeddingProvider({
+    apiKey: config.embeddings.apiKey as SecretRef,
+    model: config.embeddings.model as string,
+    dimensions: config.embeddings.dimensions,
+  });
 }
 
 export async function buildContainer(
@@ -143,10 +184,18 @@ export async function buildContainer(
   });
 
   // --- S5 knowledge ------------------------------------------------------
+  // Spread rather than passed as `hosted: undefined`: exactOptionalPropertyTypes
+  // distinguishes "absent" from "present and undefined", and absent is what
+  // "this deployment names no hosted provider" means.
+  const hostedEmbeddings = buildHostedEmbeddings(config);
   const knowledge = new KnowledgeService({
     db,
     residencyZone: config.residencyZone,
-    embeddings: createEmbeddingProvider({ deployEnvironment: config.deployEnvironment }),
+    embeddings: createEmbeddingProvider({
+      deployEnvironment: config.deployEnvironment,
+      dimensions: config.embeddings.dimensions,
+      ...(hostedEmbeddings ? { hosted: hostedEmbeddings } : {}),
+    }),
   });
 
   // --- S6 registries -----------------------------------------------------

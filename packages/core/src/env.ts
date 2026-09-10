@@ -66,6 +66,19 @@ export interface AppConfig {
     readonly anthropicApiKey: SecretRef | null;
   };
 
+  /**
+   * Retrieval embeddings. `provider` is `none` unless a deployment names one —
+   * s.11.1 keeps vendor choices out of the platform, so there is no default
+   * model here and `prod` refuses to boot on the deterministic provider.
+   */
+  readonly embeddings: {
+    readonly provider: 'none' | 'voyage';
+    readonly model: string | null;
+    /** Must match the width of `knowledge_embeddings.embedding`. */
+    readonly dimensions: number;
+    readonly apiKey: SecretRef | null;
+  };
+
   readonly webhooks: { readonly replayWindowSeconds: number };
 
   readonly workflow: {
@@ -250,6 +263,14 @@ export async function loadConfig(env: NodeJS.ProcessEnv = process.env): Promise<
       globalCostCeilingMinor: integer(env, 'LLM_GLOBAL_COST_CEILING_MINOR', 500_000),
       globalCostCurrency: optional(env, 'LLM_GLOBAL_COST_CURRENCY', 'MYR'),
       anthropicApiKey: await resolveOptional('ANTHROPIC_API_KEY'),
+    },
+
+    embeddings: {
+      provider: oneOf(env, 'EMBEDDING_PROVIDER', ['none', 'voyage'] as const, 'none'),
+      model: env['EMBEDDING_MODEL']?.trim() || null,
+      // 1024 is the width migration 0010 set on knowledge_embeddings.embedding.
+      dimensions: integer(env, 'EMBEDDING_DIMENSIONS', 1024),
+      apiKey: await resolveOptional('VOYAGE_API_KEY'),
     },
 
     webhooks: { replayWindowSeconds: integer(env, 'WEBHOOK_REPLAY_WINDOW_SECONDS', 300) },
