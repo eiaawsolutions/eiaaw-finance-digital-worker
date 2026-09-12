@@ -19,6 +19,8 @@ import {
   isWorkerError,
   newRequestId,
   newTraceId,
+  safeEqual,
+  sha256,
   toWorkerError,
 } from '@eiaaw/core';
 import { REVIEWER_MOVES, type ChannelName, type ReviewerMove } from '@eiaaw/contracts';
@@ -180,6 +182,154 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     }
     return caller;
   };
+
+  /**
+   * The console, with no principal yet.
+   *
+   * `requireCaller` cannot apply to the sign-in endpoints: they run before
+   * anybody has signed in, so there is nobody to name. What they still require
+   * is proof that the caller is the console itself — these endpoints verify
+   * passwords and mint sessions, and must not be reachable from the internet
+   * directly. The console calls them server-side over the private network.
+   *
+   * Compared over digests so every wrong token takes the same path, as in
+   * `authenticate.ts`.
+   */
+  const requireConsole = (request: FastifyRequest): void => {
+    const expected = container.config.api.serviceToken;
+    if (!expected) {
+      throw new WorkerError('auth_failed', {
+        detail:
+          'The console sign-in endpoints are unavailable because API_SERVICE_TOKEN is not ' +
+          'configured. Without it there is nothing to distinguish the console from any ' +
+          'other caller, so these endpoints refuse rather than serve unauthenticated.',
+        failureClass: 'configuration',
+        retryable: false,
+        traceId: request.traceId,
+      });
+    }
+
+    const authorization = request.headers['authorization'];
+    const presented =
+      typeof authorization === 'string' && authorization.startsWith('Bearer ')
+        ? authorization.slice('Bearer '.length)
+        : '';
+
+    if (!safeEqual(sha256(presented), sha256(expected.expose()))) {
+      throw new WorkerError('auth_failed', {
+        detail: 'This endpoint is reachable only by the console.',
+        retryable: false,
+        traceId: request.traceId,
+      });
+    }
+  };
+
+  // =======================================================================
+  // Console sign-in
+  //
+  // Replaces the environment-configured console session. Until this existed,
+  // the console named a principal and the API took its word for it with no
+  // human having proved anything — see the trust-model note in
+  // `authenticate.ts`.
+  //
+  // Every failure the service raises is already shaped for the outside world:
+  // sign-in refusals are deliberately identical to one another so the form
+  // cannot be used to discover who holds an account. Nothing here adds detail.
+  // =======================================================================
+
+  /**
+   * Always 202, whatever happened. "If that address has console access, a link
+   * is on its way" is true either way, and it is the only answer that does not
+   * also reveal whether the address is known here.
+   */
+  app.post('/v1/console-auth/request-link', async (request, reply) => {
+    requireConsole(request);
+    const body = request.body as { email?: string };
+    if (typeof body.email === 'string' && body.email.length > 0) {
+      await container.consoleAuth.requestEnrolmentLink(body.email);
+    }
+    return reply.code(202).send({ status: 'accepted' });
+  });
+
+  app.post('/v1/console-auth/password', async (request) => {
+    requireConsole(request);
+    const body = request.body as { email?: string; password?: string };
+    const pending = await container.consoleAuth.signInWithPassword(
+      body.email ?? '',
+      body.password ?? '',
+    );
+    return {
+      challenge: pending.challenge,
+      purpose: pending.purpose,
+      ...(pending.otpauthUri ? { otpauth_uri: pending.otpauthUri } : {}),
+      ...(pending.totpSecret ? { totp_secret: pending.totpSecret } : {}),
+    };
+  });
+
+  app.post('/v1/console-auth/totp', async (request) => {
+    requireConsole(request);
+    const body = request.body as { challenge?: string; code?: string };
+    const session = await container.consoleAuth.completeSignIn(
+      body.challenge ?? '',
+      body.code ?? '',
+    );
+    return {
+      cookie: session.cookie,
+      tenant_id: session.tenantId,
+      principal_id: session.principalId,
+      expires_at: session.expiresAt.toISOString(),
+    };
+  });
+
+  app.post('/v1/console-auth/accept-invite', async (request) => {
+    requireConsole(request);
+    const body = request.body as { token?: string; password?: string };
+    const pending = await container.consoleAuth.acceptInvite(body.token ?? '', body.password ?? '');
+    return {
+      challenge: pending.challenge,
+      purpose: pending.purpose,
+      ...(pending.otpauthUri ? { otpauth_uri: pending.otpauthUri } : {}),
+      ...(pending.totpSecret ? { totp_secret: pending.totpSecret } : {}),
+    };
+  });
+
+  app.post('/v1/console-auth/confirm-enrolment', async (request) => {
+    requireConsole(request);
+    const body = request.body as { challenge?: string; code?: string };
+    const session = await container.consoleAuth.confirmEnrolment(
+      body.challenge ?? '',
+      body.code ?? '',
+    );
+    return {
+      cookie: session.cookie,
+      tenant_id: session.tenantId,
+      principal_id: session.principalId,
+      expires_at: session.expiresAt.toISOString(),
+    };
+  });
+
+  /**
+   * POST rather than GET because the cookie travels in the body. A session
+   * value in a query string reaches access logs, proxies and referrer headers.
+   */
+  app.post('/v1/console-auth/session', async (request, reply) => {
+    requireConsole(request);
+    const body = request.body as { cookie?: string };
+    const resolved = await container.consoleAuth.resolveSession(body.cookie ?? '');
+    if (!resolved) return reply.code(401).send({ status: 'no_session' });
+    return {
+      tenant_id: resolved.tenantId,
+      principal_id: resolved.principalId,
+      expires_at: resolved.expiresAt.toISOString(),
+    };
+  });
+
+  app.post('/v1/console-auth/sign-out', async (request, reply) => {
+    requireConsole(request);
+    const body = request.body as { cookie?: string };
+    await container.consoleAuth.signOut(body.cookie ?? '');
+    return reply.code(204).send();
+  });
 
   // =======================================================================
   // Health

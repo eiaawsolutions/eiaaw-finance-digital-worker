@@ -18,6 +18,13 @@ import {
   createDatabase,
   createObjectStore,
 } from '@eiaaw/db';
+import {
+  CONSOLE_AUTH_DEFAULTS,
+  ConsoleAuthService,
+  SqlConsoleIdentityStore,
+  deriveSealingKey,
+} from '@eiaaw/identity';
+import { RecordingEmailSender, ResendEmailSender, type EmailSender } from '@eiaaw/email';
 import { AuditStore, EvidenceStore, emitterFor, type AuditEmitter } from '@eiaaw/audit';
 import { ConfigService } from '@eiaaw/config';
 import { ContextResolver } from '@eiaaw/context';
@@ -52,6 +59,7 @@ export interface Container {
   readonly log: Logger;
   readonly db: Database;
   readonly objects: ObjectStore;
+  readonly consoleAuth: ConsoleAuthService;
   readonly audit: AuditStore;
   readonly evidence: EvidenceStore;
   readonly emitter: (component: Parameters<typeof emitterFor>[1]) => AuditEmitter;
@@ -148,6 +156,42 @@ export async function buildContainer(
     accessKeyId: config.objectStore.accessKeyId?.expose() ?? null,
     secretAccessKey: config.objectStore.secretAccessKey?.expose() ?? null,
   });
+
+  /**
+   * Console sign-in.
+   *
+   * Two keys, both derived rather than used directly, so a weakness in one use
+   * does not reach the other: the authenticator seeds are sealed under a
+   * subkey of KMS_MASTER_KEY, and the between-factors challenge is signed under
+   * a subkey of SESSION_SIGNING_KEY — which is exactly what that secret was
+   * provisioned for.
+   *
+   * With no email credential the console can still verify a password and a
+   * code, but cannot issue an enrolment link. That is a refusal rather than a
+   * fallback: writing the link to a log instead would put a bearer credential
+   * for an admin account into the log stream.
+   */
+  const consoleEmail: EmailSender = config.email.apiKey
+    ? new ResendEmailSender({
+        apiKey: config.email.apiKey.expose(),
+        from: config.email.from,
+      })
+    : new RecordingEmailSender();
+
+  const consoleAuth = new ConsoleAuthService(
+    {
+      consoleName: config.email.consoleName,
+      consoleBaseUrl: config.consoleUrl.replace(/\/+$/, ''),
+      sealingKey: deriveSealingKey(config.crypto.kmsMasterKey.expose(), 'console-totp'),
+      challengeKey: deriveSealingKey(config.crypto.sessionSigningKey.expose(), 'console-challenge'),
+      ...CONSOLE_AUTH_DEFAULTS,
+    },
+    {
+      store: new SqlConsoleIdentityStore(db, config.residencyZone),
+      email: consoleEmail,
+      now: () => new Date(),
+    },
+  );
 
   // --- S2 audit — before anything that can act ---------------------------
   const audit = new AuditStore({
@@ -289,6 +333,7 @@ export async function buildContainer(
     log,
     db,
     objects,
+    consoleAuth,
     audit,
     evidence,
     emitter: (component) => emitterFor(audit, component),

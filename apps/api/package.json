@@ -35,6 +35,8 @@
     "@eiaaw/contracts": "workspace:*",
     "@eiaaw/core": "workspace:*",
     "@eiaaw/db": "workspace:*",
+    "@eiaaw/email": "workspace:*",
+    "@eiaaw/identity": "workspace:*",
     "@eiaaw/delivery": "workspace:*",
     "@eiaaw/intake": "workspace:*",
     "@eiaaw/knowledge": "workspace:*",
