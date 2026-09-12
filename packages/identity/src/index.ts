@@ -36,3 +36,5 @@ export {
   inviteTokenMatches,
   type IssuedToken,
 } from './tokens.js';
+
+export { deriveSealingKey, openSecret, sealSecret } from './sealing.js';
