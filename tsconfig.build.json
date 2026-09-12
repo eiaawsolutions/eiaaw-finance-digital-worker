@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/core" },
     { "path": "packages/contracts" },
+    { "path": "packages/identity" },
     { "path": "packages/telemetry" },
     { "path": "packages/db" },
     { "path": "packages/audit" },
