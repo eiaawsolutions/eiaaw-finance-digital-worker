@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "@eiaaw/identity",
   "version": "0.1.0",
   "private": true,
@@ -16,6 +16,7 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@eiaaw/core": "workspace:*"
+    "@eiaaw/core": "workspace:*",
+    "@eiaaw/email": "workspace:*"
   }
 }
