@@ -376,6 +376,12 @@ importers:
         specifier: workspace:*
         version: link:../telemetry
 
+  packages/email:
+    dependencies:
+      '@eiaaw/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/identity:
     dependencies:
       '@eiaaw/core':

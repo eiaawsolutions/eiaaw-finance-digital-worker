@@ -26,6 +26,10 @@ export default {
         'assurance', // C13
         'delivery', // C14
         'channels', // C1
+        // Transactional email the platform sends on its own behalf — enrolment
+        // and reset links. Not C14: delivery presupposes an established
+        // identity, and these are sent to establish one.
+        'email',
         'authorisation', // L9
         // apps
         'api',
