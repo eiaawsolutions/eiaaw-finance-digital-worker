@@ -15,6 +15,7 @@
     "build": "tsc -b",
     "migrate": "tsx --tsconfig ../../tsconfig.dev.json src/migrate-cli.ts",
     "seed": "tsx --tsconfig ../../tsconfig.dev.json src/seed-cli.ts",
+    "bootstrap-admin": "tsx --tsconfig ../../tsconfig.dev.json src/bootstrap-admin-cli.ts",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {

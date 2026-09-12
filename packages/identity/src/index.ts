@@ -56,6 +56,8 @@ export {
   type StoredSession,
 } from './console-store.js';
 
+export { SqlConsoleIdentityStore } from './console-store.sql.js';
+
 export {
   CONSOLE_AUTH_DEFAULTS,
   ConsoleAuthService,

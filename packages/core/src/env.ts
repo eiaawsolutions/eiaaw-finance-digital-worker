@@ -88,6 +88,21 @@ export interface AppConfig {
     readonly apiKey: SecretRef | null;
   };
 
+  /**
+   * Transactional email for console enrolment and password resets.
+   *
+   * A null key means the console cannot send an enrolment link. That is a
+   * refusal, not a fallback: printing the link to a log instead would put a
+   * bearer credential for an admin account into the log stream.
+   */
+  readonly email: {
+    readonly apiKey: SecretRef | null;
+    /** Display form. The domain must be verified with the provider. */
+    readonly from: string;
+    /** Shown in emails and as the authenticator app entry. */
+    readonly consoleName: string;
+  };
+
   readonly webhooks: { readonly replayWindowSeconds: number };
 
   readonly workflow: {
@@ -281,6 +296,12 @@ export async function loadConfig(env: NodeJS.ProcessEnv = process.env): Promise<
       // 1024 is the width migration 0010 set on knowledge_embeddings.embedding.
       dimensions: integer(env, 'EMBEDDING_DIMENSIONS', 1024),
       apiKey: await resolveOptional('VOYAGE_API_KEY'),
+    },
+
+    email: {
+      apiKey: await resolveOptional('RESEND_API'),
+      from: optional(env, 'EMAIL_FROM', 'EIAAW Finance Worker <noreply@eiaawsolutions.com>'),
+      consoleName: optional(env, 'CONSOLE_NAME', 'EIAAW Finance Worker'),
     },
 
     webhooks: { replayWindowSeconds: integer(env, 'WEBHOOK_REPLAY_WINDOW_SECONDS', 300) },

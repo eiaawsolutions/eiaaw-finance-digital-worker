@@ -1,4 +1,4 @@
-﻿{
+{
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "./src",
@@ -6,5 +6,5 @@
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../core" }, { "path": "../email" }]
+  "references": [{ "path": "../core" }, { "path": "../email" }, { "path": "../db" }]
 }

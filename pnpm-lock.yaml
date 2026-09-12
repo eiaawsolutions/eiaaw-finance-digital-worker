@@ -85,6 +85,12 @@ importers:
       '@eiaaw/delivery':
         specifier: workspace:*
         version: link:../../packages/delivery
+      '@eiaaw/email':
+        specifier: workspace:*
+        version: link:../../packages/email
+      '@eiaaw/identity':
+        specifier: workspace:*
+        version: link:../../packages/identity
       '@eiaaw/intake':
         specifier: workspace:*
         version: link:../../packages/intake
@@ -387,6 +393,9 @@ importers:
       '@eiaaw/core':
         specifier: workspace:*
         version: link:../core
+      '@eiaaw/db':
+        specifier: workspace:*
+        version: link:../db
       '@eiaaw/email':
         specifier: workspace:*
         version: link:../email

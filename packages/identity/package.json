@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "@eiaaw/identity",
   "version": "0.1.0",
   "private": true,
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@eiaaw/core": "workspace:*",
+    "@eiaaw/db": "workspace:*",
     "@eiaaw/email": "workspace:*"
   }
 }
