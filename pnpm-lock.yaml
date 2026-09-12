@@ -387,6 +387,9 @@ importers:
       '@eiaaw/core':
         specifier: workspace:*
         version: link:../core
+      '@eiaaw/email':
+        specifier: workspace:*
+        version: link:../email
 
   packages/intake:
     dependencies:

@@ -38,3 +38,31 @@ export {
 } from './tokens.js';
 
 export { deriveSealingKey, openSecret, sealSecret } from './sealing.js';
+
+export {
+  signChallenge,
+  verifyChallenge,
+  type ChallengePayload,
+  type ChallengePurpose,
+} from './challenge.js';
+
+export {
+  InMemoryConsoleIdentityStore,
+  type ConsoleIdentityStore,
+  type DirectoryEntry,
+  type InvitePurpose,
+  type StoredCredential,
+  type StoredInvite,
+  type StoredSession,
+} from './console-store.js';
+
+export {
+  CONSOLE_AUTH_DEFAULTS,
+  ConsoleAuthService,
+  emailHash,
+  type ConsoleAuthConfig,
+  type ConsoleAuthDeps,
+  type OpenedSession,
+  type PendingSecondFactor,
+  type ResolvedSession,
+} from './console-auth.js';
