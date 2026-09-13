@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  * nothing else on this page can be trusted.
  */
 export default async function OverviewPage() {
-  const session = currentSession();
+  const session = await currentSession();
 
   const [health, settings, handoffs, chain] = await Promise.all([
     apiGet<Health>('/v1/health'),

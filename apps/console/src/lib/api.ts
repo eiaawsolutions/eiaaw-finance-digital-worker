@@ -5,40 +5,10 @@
  * action, so the session credential never reaches the browser. The console has
  * no client-side fetch to the API at all.
  */
-import { SecretResolver, createSecretProvider } from '@eiaaw/core';
+import { getSession } from './auth';
+import { API_URL, serviceToken } from './service';
 
-const API_URL = process.env['PUBLIC_API_URL'] ?? 'http://localhost:3000';
-
-/**
- * Authenticates this console to the API.
- *
- * `API_SERVICE_TOKEN` arrives as a `secret://` handle like every other secret,
- * so it is dereferenced here rather than sent as-is — the deploy contract puts
- * handles in configuration and values only in memory. Resolved once and held:
- * the resolver caches, but so does this, so a page render never waits on
- * Infisical twice.
- *
- * Server-side only, like everything in this file. It proves the request came
- * from the console, not which human is acting — the principal headers say that
- * and the API takes the console's word for it. See apps/api/src/authenticate.ts
- * for what that does and does not evidence.
- */
-let resolvedToken: Promise<string> | null = null;
-
-function serviceToken(): Promise<string> {
-  const raw = process.env['API_SERVICE_TOKEN'];
-  if (!raw) return Promise.resolve('');
-  resolvedToken ??= new SecretResolver(createSecretProvider())
-    .resolve(raw, 'API_SERVICE_TOKEN')
-    .then((ref) => ref.expose())
-    .catch(() => {
-      // Let the next render try again rather than caching a failure for the
-      // lifetime of the process.
-      resolvedToken = null;
-      return '';
-    });
-  return resolvedToken;
-}
+export { API_URL, serviceToken };
 
 /** The headers every call carries: who we are, and who we act for. */
 async function authHeaders(session: Session): Promise<Record<string, string>> {
@@ -58,20 +28,32 @@ export interface Session {
 }
 
 /**
- * The current session.
+ * The current session — now a person, not a environment variable.
  *
- * Still environment-configured rather than established by a person signing in.
- * In prod the service token makes these headers acceptable to the API, so —
- * unlike before — they now take effect there. That is the point of the token
- * and also its limit: the console asserts this principal, nobody proved it.
+ * This used to read `CONSOLE_PRINCIPAL_ID ?? 'usr_console'` with admin
+ * defaulting to true, which meant the API's attribution warning was literally
+ * true: an approval named a principal without proving one was present, and
+ * anybody who reached the console was an administrator.
  *
- * OIDC replaces this function, not the transport around it.
+ * It now resolves the httpOnly session cookie against the API. Callers reach
+ * this only from inside a guarded layout, so a null here means the session
+ * expired mid-render rather than that nobody signed in; refusing is correct
+ * either way, because there is no principal to attribute the action to.
  */
-export function currentSession(): Session {
+export async function currentSession(): Promise<Session> {
+  const session = await getSession();
+
+  if (!session) {
+    throw new Error(
+      'No console session. An action that names a principal cannot proceed without one — ' +
+        'sign in again.',
+    );
+  }
+
   return {
-    tenant_id: process.env['CONSOLE_TENANT_ID'] ?? 'tnt_acme-demo',
-    principal_id: process.env['CONSOLE_PRINCIPAL_ID'] ?? 'usr_console',
-    admin: process.env['CONSOLE_ADMIN'] !== 'false',
+    tenant_id: session.tenant_id,
+    principal_id: session.principal_id,
+    admin: session.admin,
   };
 }
 
@@ -101,7 +83,7 @@ export interface ApiResult<T> {
 }
 
 export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
-  const session = currentSession();
+  const session = await currentSession();
 
   try {
     const response = await fetch(`${API_URL}${path}`, {
@@ -144,7 +126,7 @@ export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<ApiResult<T>> {
-  const session = currentSession();
+  const session = await currentSession();
 
   try {
     const response = await fetch(`${API_URL}${path}`, {

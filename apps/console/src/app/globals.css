@@ -655,3 +655,241 @@ h3 {
   color: var(--mute);
   max-width: 78ch;
 }
+
+/* =============================================================================
+   Sign-in surfaces
+
+   The one part of the console an unauthenticated visitor sees. It follows the
+   locked design system rather than the app-shell addendum: this is a page
+   somebody reads and decides to trust, not a dense working surface, so it gets
+   the warm ground, the serif accent and generous spacing the marketing
+   language uses.
+
+   Every colour below is var() or color-mix() over the locked block. No hex.
+   ========================================================================== */
+
+.auth-ground {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-6);
+  padding: var(--sp-7) var(--sp-5);
+  background:
+    radial-gradient(
+      120% 90% at 50% -10%,
+      color-mix(in srgb, var(--primary-tint) 70%, transparent) 0%,
+      transparent 60%
+    ),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-warm) 100%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 27rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  padding: var(--sp-7);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 6%, transparent),
+    0 12px 32px -12px color-mix(in srgb, var(--ink) 18%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--surface) 90%, transparent);
+}
+
+.auth-lockup {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-5);
+  margin-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.auth-title {
+  font-family: var(--sans);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  margin: 0 0 var(--sp-3);
+}
+
+/* The one editorial accent the locked system allows, and only inside display type. */
+.auth-title em {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--primary-dark);
+}
+
+.auth-lede {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--mute);
+  margin: 0 0 var(--sp-6);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.field-label {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--mute);
+}
+
+.auth-form .ctl {
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 0.9375rem;
+  border-radius: var(--radius-sm);
+}
+
+.auth-form .ctl:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  outline-offset: 1px;
+  border-color: var(--primary);
+}
+
+.btn--wide {
+  width: 100%;
+  justify-content: center;
+  padding-block: var(--sp-3);
+}
+
+.auth-alt {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.auth-alt-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin: 0;
+}
+
+.auth-qr {
+  display: flex;
+  justify-content: center;
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-5);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+}
+
+.auth-qr svg {
+  width: 200px;
+  height: 200px;
+  display: block;
+}
+
+.auth-manual {
+  margin-bottom: var(--sp-5);
+  font-size: 0.8125rem;
+}
+
+.auth-manual summary {
+  cursor: pointer;
+  color: var(--primary-dark);
+  font-weight: 500;
+}
+
+.auth-secret {
+  margin: var(--sp-2) 0 0;
+  padding: var(--sp-3);
+  background: var(--bg-warm);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  letter-spacing: 0.08em;
+  word-break: break-all;
+  color: var(--ink);
+}
+
+/* Wide tracking so a six-digit code is read as digits, not as a number. */
+.auth-code {
+  font-family: var(--mono);
+  font-size: 1.25rem;
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.auth-foot {
+  font-size: 0.625rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--mute) 75%, transparent);
+}
+
+/* --- who is signed in, at the foot of the rail --------------------------- */
+
+.rail-foot {
+  margin-top: auto;
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  min-width: 0;
+}
+
+.who-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.who-meta {
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .auth-card {
+    animation: auth-rise 0.4s var(--ease) both;
+  }
+}
+
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
