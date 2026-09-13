@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { Nav } from '@/components/nav';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -9,6 +8,12 @@ export const metadata: Metadata = {
     'scope, enrolment and the audit trail.',
 };
 
+/**
+ * Document only. The navigation shell lives in `(app)/layout.tsx`, behind the
+ * session guard, because a sign-in page that renders the rail shows an
+ * unauthenticated visitor the shape of the system and offers them links they
+ * cannot follow.
+ */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en-MY">
@@ -16,27 +21,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body>
-        <div className="shell">
-          <nav className="rail pane" aria-label="Primary">
-            <a className="lockup" href="/">
-              <span className="lockup-mark" aria-hidden="true">
-                FE
-              </span>
-              <span className="lockup-text">
-                <strong>EIAAW Solutions</strong>
-                <small>AI &middot; Human Partnerships</small>
-              </span>
-            </a>
-            <Nav />
-          </nav>
-          <main className="pane">{children}</main>
-        </div>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

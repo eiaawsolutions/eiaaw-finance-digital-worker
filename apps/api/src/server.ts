@@ -317,9 +317,36 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const body = request.body as { cookie?: string };
     const resolved = await container.consoleAuth.resolveSession(body.cookie ?? '');
     if (!resolved) return reply.code(401).send({ status: 'no_session' });
+
+    // Administrative rights come from the principal record, not from the
+    // console asserting them. Before this endpoint existed the console sent
+    // `x-admin: true` by default, so every session was an admin session.
+    const rows = await withTenant(
+      container.db,
+      {
+        tenantId: resolved.tenantId,
+        residencyZone: container.config.residencyZone,
+        readOnly: true,
+      },
+      async (scope) =>
+        scope.sql<{ clearance: string; status: string }[]>`
+          SELECT clearance, status FROM principals
+           WHERE tenant_id = ${resolved.tenantId} AND principal_id = ${resolved.principalId}
+        `,
+    );
+
+    const principal = rows[0];
+    // A principal deactivated after signing in loses the session immediately,
+    // rather than at its natural expiry twelve hours later.
+    if (!principal || principal.status !== 'active') {
+      return reply.code(401).send({ status: 'no_session' });
+    }
+
     return {
       tenant_id: resolved.tenantId,
       principal_id: resolved.principalId,
+      clearance: principal.clearance,
+      admin: principal.clearance === 'restricted',
       expires_at: resolved.expiresAt.toISOString(),
     };
   });
