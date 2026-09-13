@@ -125,6 +125,18 @@ export default defineRailway(() => {
     OBJECT_STORE_ACCESS_KEY_ID: 'secret://eiaaw-all-projects/prod/R2_ACCESS_KEY_ID',
     OBJECT_STORE_SECRET_ACCESS_KEY: 'secret://eiaaw-all-projects/prod/R2_SECRET_ACCESS_KEY',
 
+    // Where a person signs in. Two things read it and both matter: the API's
+    // CORS origin, and the enrolment link the API puts in an email — a wrong
+    // value here sends somebody to a host that cannot complete their sign-up.
+    PUBLIC_CONSOLE_URL: 'https://fin.eiaawsolutions.com',
+
+    // Transactional email for enrolment and reset links. The sending domain
+    // must be verified with Resend or nothing is delivered and the enrolment
+    // link silently never arrives.
+    RESEND_API: 'secret://eiaaw-all-projects/prod/RESEND_API',
+    EMAIL_FROM: 'EIAAW Finance Expert <noreply@eiaawsolutions.com>',
+    CONSOLE_NAME: 'EIAAW Finance Expert',
+
     WORM_DRIVER: 'postgres',
     WORM_SECONDARY_DRIVER: 'none',
     WORM_ANCHOR_INTERVAL_MINUTES: '60',
