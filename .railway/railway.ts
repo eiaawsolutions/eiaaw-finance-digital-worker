@@ -247,7 +247,11 @@ export default defineRailway(() => {
     build: dockerBuild,
     deploy: {
       startCommand: 'pnpm --filter @eiaaw/console start',
-      healthcheckPath: '/',
+      // Not `/`. Since the console grew a sign-in, `/` answers an
+      // unauthenticated request with a 307 to /sign-in, which is not a passing
+      // health check — the deploy is marked failed while the container runs
+      // perfectly and the previous version keeps serving.
+      healthcheckPath: '/healthz',
       healthcheckTimeout: 90,
     },
     replicas: { [REGION]: 1 },
