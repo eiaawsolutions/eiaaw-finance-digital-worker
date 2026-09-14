@@ -24,36 +24,105 @@ import type {
   StoredSession,
 } from './console-store.js';
 
+/**
+ * A timestamp as this database hands it back.
+ *
+ * `createDatabase` overrides postgres.js's date parser to return the RFC 3339
+ * string rather than a Date, so a value never round-trips through a
+ * local-timezone Date and back (DWD-06 s.2.2). That is a deliberate,
+ * system-wide decision and this adapter has to live with it.
+ */
+type DbTimestamp = string | Date;
+
+/**
+ * The conversion that has to happen at this boundary, and the reason it is not
+ * optional.
+ *
+ * `ConsoleIdentityStore` declares these fields as `Date` because the service
+ * does arithmetic on them — is this lock still in force, has this link expired.
+ * Handing it a string instead does not fail loudly. `someString <= someDate`
+ * coerces both operands toward numbers, `Number("2026-09-14T…")` is NaN, and
+ * every comparison against NaN is false. The result is a lockout that never
+ * engages, an invite that never expires and a session that never ends, with
+ * nothing anywhere reporting a problem.
+ *
+ * The unit tests did not catch it because the in-memory store stores real
+ * Dates: both implementations satisfied the same TypeScript interface and
+ * behaved differently at runtime. `console-store.sql.test.ts` now feeds these
+ * mappers the string form the driver actually produces.
+ */
+function toDate(value: DbTimestamp): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
+function toDateOrNull(value: DbTimestamp | null): Date | null {
+  return value === null ? null : toDate(value);
+}
+
 interface DirectoryRow {
   readonly tenant_id: string;
   readonly principal_id: string;
 }
 
-interface CredentialRow {
+export interface CredentialRow {
   readonly tenant_id: string;
   readonly principal_id: string;
   readonly password_hash: string | null;
   readonly totp_secret_sealed: string | null;
-  readonly totp_confirmed_at: Date | null;
+  readonly totp_confirmed_at: DbTimestamp | null;
   readonly failed_attempts: number;
-  readonly locked_until: Date | null;
+  readonly locked_until: DbTimestamp | null;
 }
 
-interface InviteRow {
+export interface InviteRow {
   readonly tenant_id: string;
   readonly token_hash: string;
   readonly principal_id: string;
   readonly purpose: InvitePurpose;
-  readonly expires_at: Date;
-  readonly consumed_at: Date | null;
+  readonly expires_at: DbTimestamp;
+  readonly consumed_at: DbTimestamp | null;
 }
 
-interface SessionRow {
+export interface SessionRow {
   readonly tenant_id: string;
   readonly session_hash: string;
   readonly principal_id: string;
-  readonly expires_at: Date;
-  readonly revoked_at: Date | null;
+  readonly expires_at: DbTimestamp;
+  readonly revoked_at: DbTimestamp | null;
+}
+
+/** Exported so the string-to-Date boundary can be tested without a database. */
+export function mapCredentialRow(row: CredentialRow): StoredCredential {
+  return {
+    tenantId: row.tenant_id,
+    principalId: row.principal_id,
+    passwordHash: row.password_hash,
+    totpSecretSealed: row.totp_secret_sealed,
+    totpConfirmedAt: toDateOrNull(row.totp_confirmed_at),
+    failedAttempts: Number(row.failed_attempts),
+    lockedUntil: toDateOrNull(row.locked_until),
+  };
+}
+
+export function mapInviteRow(row: InviteRow): StoredInvite {
+  return {
+    tenantId: row.tenant_id,
+    tokenHash: row.token_hash,
+    principalId: row.principal_id,
+    purpose: row.purpose,
+    expiresAt: toDate(row.expires_at),
+    consumedAt: toDateOrNull(row.consumed_at),
+  };
+}
+
+export function mapSessionRow(row: SessionRow): StoredSession {
+  return {
+    tenantId: row.tenant_id,
+    sessionHash: row.session_hash,
+    principalId: row.principal_id,
+    expiresAt: toDate(row.expires_at),
+    revokedAt: toDateOrNull(row.revoked_at),
+  };
 }
 
 export class SqlConsoleIdentityStore implements ConsoleIdentityStore {
@@ -101,16 +170,7 @@ export class SqlConsoleIdentityStore implements ConsoleIdentityStore {
          WHERE tenant_id = ${tenantId} AND principal_id = ${principalId}
       `;
       const row = rows[0];
-      if (!row) return null;
-      return {
-        tenantId: row.tenant_id,
-        principalId: row.principal_id,
-        passwordHash: row.password_hash,
-        totpSecretSealed: row.totp_secret_sealed,
-        totpConfirmedAt: row.totp_confirmed_at,
-        failedAttempts: row.failed_attempts,
-        lockedUntil: row.locked_until,
-      };
+      return row ? mapCredentialRow(row) : null;
     });
   }
 
@@ -198,15 +258,7 @@ export class SqlConsoleIdentityStore implements ConsoleIdentityStore {
          WHERE tenant_id = ${tenantId} AND token_hash = ${tokenHash}
       `;
       const row = rows[0];
-      if (!row) return null;
-      return {
-        tenantId: row.tenant_id,
-        tokenHash: row.token_hash,
-        principalId: row.principal_id,
-        purpose: row.purpose,
-        expiresAt: row.expires_at,
-        consumedAt: row.consumed_at,
-      };
+      return row ? mapInviteRow(row) : null;
     });
   }
 
@@ -237,14 +289,7 @@ export class SqlConsoleIdentityStore implements ConsoleIdentityStore {
          WHERE tenant_id = ${tenantId} AND session_hash = ${sessionHash}
       `;
       const row = rows[0];
-      if (!row) return null;
-      return {
-        tenantId: row.tenant_id,
-        sessionHash: row.session_hash,
-        principalId: row.principal_id,
-        expiresAt: row.expires_at,
-        revokedAt: row.revoked_at,
-      };
+      return row ? mapSessionRow(row) : null;
     });
   }
 
